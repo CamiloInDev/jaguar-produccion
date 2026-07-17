@@ -3,8 +3,12 @@ import { dbService } from '../db';
 
 const router = Router();
 
-router.get('/', (_req, res) => {
-  return res.json(dbService.getHaciendas());
+router.get('/', async (_req, res) => {
+  try {
+    return res.json(await dbService.getHaciendas());
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 export default router;

@@ -1,10 +1,13 @@
+/** Roles del sistema con permisos granulares: admin > editor > support > cliente */
+export type UserRole = 'admin' | 'editor' | 'support' | 'cliente';
+
 export interface User {
   id: string;
   email: string;
   nombre: string;
   apellido: string;
   telefono?: string;
-  rol: 'cliente' | 'admin';
+  rol: UserRole;
   created_at: string;
 }
 

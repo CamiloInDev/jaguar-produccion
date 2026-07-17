@@ -99,7 +99,7 @@ describe('PUT /api/reservas/:id/estado - Admin', () => {
   it('admin can update reservation status', async () => {
     const createRes = await request(app)
       .post('/api/reservas')
-      .send({ tipo: 'academia', item_id: 'exp_1', item_nombre: 'Test', item_slug: 'test-exp', fecha: tomorrow(), nombre: 'Test', email: 'test@test.com', telefono: '300', cantidad_personas: 1 });
+      .send({ tipo: 'academia', item_id: 'exp_1', item_nombre: 'Test', item_slug: 'test-exp', fecha: tomorrow(), nombre: 'Test', email: 'test@test.com', telefono: '3001112233', cantidad_personas: 1 });
     const resId = createRes.body.reservation.id;
 
     const cookies = await getAdminCookies();

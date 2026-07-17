@@ -40,7 +40,7 @@ describe('POST /api/contacto (public)', () => {
       .post('/api/contacto')
       .send({ nombre: 'Test' });
     expect(res.status).toBe(400);
-    expect(res.body.error).toContain('Diligencie');
+    expect(res.body.error).toContain('inválidos');
   });
 });
 

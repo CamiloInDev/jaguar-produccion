@@ -161,9 +161,9 @@ describe('PUT /api/ordenes/:id/estado - Admin', () => {
   });
 });
 
-describe('POST /api/ordenes/wompi-test-trigger', () => {
+describe('POST /api/ordenes/wompi-test-trigger (requires admin)', () => {
   it('simulates wompi webhook for existing order', async () => {
-    const cookies = await getUserCookies();
+    const cookies = await getAdminCookies();
     await request(app)
       .post('/api/ordenes/checkout')
       .set('Cookie', cookies)
@@ -175,14 +175,17 @@ describe('POST /api/ordenes/wompi-test-trigger', () => {
       });
     const res = await request(app)
       .post('/api/ordenes/wompi-test-trigger')
+      .set('Cookie', cookies)
       .send({ reference: 'ORDER-WOMPI-TEST', status: 'APPROVED' });
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('pagado');
   });
 
   it('returns 404 for non-existent reference', async () => {
+    const cookies = await getAdminCookies();
     const res = await request(app)
       .post('/api/ordenes/wompi-test-trigger')
+      .set('Cookie', cookies)
       .send({ reference: 'NONEXISTENT', status: 'APPROVED' });
     expect(res.status).toBe(404);
   });

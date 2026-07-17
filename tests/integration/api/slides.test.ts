@@ -94,7 +94,7 @@ describe('PUT /api/slides/:id - Admin', () => {
     await request(app)
       .post('/api/slides')
       .set('Cookie', adminCookies)
-      .send({ title: 'Slide', subtitle: 'S', badge: 'B', buttonText: 'Go', buttonLink: '/', bgImage: 'https://example.com/bg.jpg', orden: 1 });
+      .send({ title: 'Slide', subtitle: 'Sub', badge: 'Bdg', buttonText: 'Go', buttonLink: '/', bgImage: 'https://example.com/bg.jpg', orden: 1 });
     const all = await request(app).get('/api/slides/all').set('Cookie', adminCookies);
     const slide = all.body.find((s: any) => s.title === 'Slide');
     const slideId = slide.id;
@@ -114,7 +114,7 @@ describe('DELETE /api/slides/:id - Admin', () => {
     await request(app)
       .post('/api/slides')
       .set('Cookie', cookies)
-      .send({ title: 'To Delete', subtitle: 'S', badge: 'B', buttonText: 'Go', buttonLink: '/', bgImage: 'https://example.com/bg.jpg', orden: 1 });
+      .send({ title: 'To Delete', subtitle: 'Sub', badge: 'Bdg', buttonText: 'Go', buttonLink: '/', bgImage: 'https://example.com/bg.jpg', orden: 1 });
     const all = await request(app).get('/api/slides/all').set('Cookie', cookies);
     const slideId = all.body[0].id;
 
@@ -138,7 +138,7 @@ describe('GET /api/slides/:id - Admin', () => {
     await request(app)
       .post('/api/slides')
       .set('Cookie', cookies)
-      .send({ title: 'Specific', subtitle: 'S', badge: 'B', buttonText: 'Go', buttonLink: '/', bgImage: 'https://example.com/bg.jpg', orden: 1 });
+      .send({ title: 'Specific', subtitle: 'Sub', badge: 'Bdg', buttonText: 'Go', buttonLink: '/', bgImage: 'https://example.com/bg.jpg', orden: 1 });
     const all = await request(app).get('/api/slides/all').set('Cookie', cookies);
     const slide = all.body.find((s: any) => s.title === 'Specific');
     const slideId = slide.id;

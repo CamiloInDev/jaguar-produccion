@@ -35,15 +35,16 @@ describe('POST /api/auth/registro', () => {
       .post('/api/auth/registro')
       .send({ email: 'test@test.com' });
     expect(res.status).toBe(400);
-    expect(res.body.error).toContain('obligatorios');
+    expect(res.body.error).toContain('inválidos');
   });
 
-  it('rejects duplicate email', async () => {
+  it('rejects duplicate email (no user enumeration)', async () => {
     const res = await request(app)
       .post('/api/auth/registro')
-      .send({ email: 'admin@test.com', password: 'test123', nombre: 'Dup', apellido: 'User' });
-    expect(res.status).toBe(400);
-    expect(res.body.error).toContain('registrado');
+      .send({ email: 'admin@test.com', password: 'test1234', nombre: 'Dup', apellido: 'User' });
+    // No revelamos si el email existe — devolvemos success genérico
+    expect(res.status).toBe(201);
+    expect(res.body.success).toBe(true);
   });
 });
 
@@ -79,7 +80,7 @@ describe('POST /api/auth/login', () => {
       .post('/api/auth/login')
       .send({});
     expect(res.status).toBe(400);
-    expect(res.body.error).toContain('correo');
+    expect(res.body.error).toContain('inválidos');
   });
 });
 

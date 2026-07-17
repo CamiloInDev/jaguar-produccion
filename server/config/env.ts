@@ -20,6 +20,18 @@ const envSchema = z.object({
   // Application
   APP_URL: z.string().url().default('http://localhost:3000'),
 
+  // MySQL database (Hostinger Business)
+  DB_HOST: z.string().min(1, 'DB_HOST is required').default('localhost'),
+  DB_PORT: z.coerce.number().default(3306),
+  DB_USER: z.string().min(1, 'DB_USER is required'),
+  DB_PASSWORD: z.string().default(''),
+  DB_NAME: z.string().min(1, 'DB_NAME is required'),
+
+  // Seed admin (only used by the seed script; optional for the running server)
+  ADMIN_EMAIL: z.string().email().optional(),
+  ADMIN_PASSWORD: z.string().min(8).optional(),
+  ADMIN_NOMBRE: z.string().optional(),
+  ADMIN_APELLIDO: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

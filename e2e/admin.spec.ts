@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { loginAs } from './helpers';
 
 test.describe('Admin Panel', () => {
   test.describe('Access Control', () => {
@@ -9,12 +10,7 @@ test.describe('Admin Panel', () => {
     });
 
     test('admin can access admin panel', async ({ page }) => {
-      await page.goto('/auth/login');
-      await page.waitForLoadState('networkidle');
-      await page.fill('input[type="email"]', 'admin@jaguarcoffee.com');
-      await page.fill('input[type="password"]', 'admin123');
-      await page.click('button[type="submit"]');
-      await page.waitForURL(/\/mi-cuenta/);
+      await loginAs(page, 'admin@jaguarcoffee.com', 'admin123');
 
       await page.goto('/admin');
       await page.waitForLoadState('networkidle');
@@ -23,12 +19,7 @@ test.describe('Admin Panel', () => {
     });
 
     test('regular user is redirected from admin', async ({ page }) => {
-      await page.goto('/auth/login');
-      await page.waitForLoadState('networkidle');
-      await page.fill('input[type="email"]', 'cliente@jaguarcoffee.com');
-      await page.fill('input[type="password"]', 'cliente123');
-      await page.click('button[type="submit"]');
-      await page.waitForURL(/\/mi-cuenta/);
+      await loginAs(page, 'cliente@jaguarcoffee.com', 'cliente123');
 
       await page.goto('/admin');
       await page.waitForLoadState('networkidle');
@@ -38,24 +29,18 @@ test.describe('Admin Panel', () => {
 
   test.describe('Admin Product CRUD', () => {
     test.beforeEach(async ({ page }) => {
-      await page.goto('/auth/login');
-      await page.waitForLoadState('networkidle');
-      await page.fill('input[type="email"]', 'admin@jaguarcoffee.com');
-      await page.fill('input[type="password"]', 'admin123');
-      await page.click('button[type="submit"]');
-      await page.waitForURL(/\/mi-cuenta/);
+      await loginAs(page, 'admin@jaguarcoffee.com', 'admin123');
       await page.goto('/admin');
       await page.waitForLoadState('networkidle');
     });
 
     test('admin can see product management section', async ({ page }) => {
-      const productsTab = page.locator('text=Productos').or(page.locator('text=productos')).first();
+      const productsTab = page.locator('text=Cafés').first();
       if (await productsTab.isVisible()) {
         await productsTab.click();
         await page.waitForTimeout(1000);
       }
-      const table = page.locator('table').or(page.locator('[class*="product"]')).first();
-      await expect(table).toBeVisible({ timeout: 5000 });
+      await expect(page.locator('table').first()).toBeVisible({ timeout: 5000 });
     });
 
     test('admin can navigate between admin tabs', async ({ page }) => {
@@ -81,12 +66,7 @@ test.describe('Admin Panel', () => {
 
   test.describe('Admin Slides/Banner Management', () => {
     test('admin can manage slides', async ({ page }) => {
-      await page.goto('/auth/login');
-      await page.waitForLoadState('networkidle');
-      await page.fill('input[type="email"]', 'admin@jaguarcoffee.com');
-      await page.fill('input[type="password"]', 'admin123');
-      await page.click('button[type="submit"]');
-      await page.waitForURL(/\/mi-cuenta/);
+      await loginAs(page, 'admin@jaguarcoffee.com', 'admin123');
 
       await page.goto('/admin');
       await page.waitForLoadState('networkidle');
@@ -107,12 +87,7 @@ test.describe('Admin Panel', () => {
 
   test.describe('Admin Orders Management', () => {
     test('admin can view orders', async ({ page }) => {
-      await page.goto('/auth/login');
-      await page.waitForLoadState('networkidle');
-      await page.fill('input[type="email"]', 'admin@jaguarcoffee.com');
-      await page.fill('input[type="password"]', 'admin123');
-      await page.click('button[type="submit"]');
-      await page.waitForURL(/\/mi-cuenta/);
+      await loginAs(page, 'admin@jaguarcoffee.com', 'admin123');
 
       await page.goto('/admin');
       await page.waitForLoadState('networkidle');

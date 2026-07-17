@@ -1,31 +1,23 @@
 import { test as setup, expect } from '@playwright/test';
+import { loginAs } from './helpers';
 
 const authFile = 'e2e/.auth/user.json';
 
 setup('authenticate as admin', async ({ page }) => {
-  await page.goto('/auth/login');
+  await loginAs(page, 'admin@jaguarcoffee.com', 'admin123');
   await page.waitForLoadState('networkidle');
-
-  await page.fill('input[type="email"]', 'admin@jaguarcoffee.com');
-  await page.fill('input[type="password"]', 'admin123');
-  await page.click('button[type="submit"]');
-
-  await page.waitForURL(/\/mi-cuenta/);
-  await expect(page.locator('text=Mi Cuenta').first()).toBeVisible({ timeout: 10000 });
-
+  // Set privacy consent in localStorage
+  await page.evaluate(() => {
+    localStorage.setItem('jaguar_privacy_consent', JSON.stringify({ accepted: true, date: new Date().toISOString() }));
+  });
   await page.context().storageState({ path: authFile });
 });
 
 setup('authenticate as regular user', async ({ page }) => {
-  await page.goto('/auth/login');
+  await loginAs(page, 'cliente@jaguarcoffee.com', 'cliente123');
   await page.waitForLoadState('networkidle');
-
-  await page.fill('input[type="email"]', 'cliente@jaguarcoffee.com');
-  await page.fill('input[type="password"]', 'cliente123');
-  await page.click('button[type="submit"]');
-
-  await page.waitForURL(/\/mi-cuenta/);
-  await expect(page.locator('text=Mi Cuenta').first()).toBeVisible({ timeout: 10000 });
-
+  await page.evaluate(() => {
+    localStorage.setItem('jaguar_privacy_consent', JSON.stringify({ accepted: true, date: new Date().toISOString() }));
+  });
   await page.context().storageState({ path: 'e2e/.auth/user.json' });
 });

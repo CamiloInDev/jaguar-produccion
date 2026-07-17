@@ -1,20 +1,41 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Jaguar Coffee — Plataforma E-commerce
 
-# Run and deploy your AI Studio app
+Tienda y plataforma de experiencias de **Jaguar Coffee** (café de especialidad colombiano):
+catálogo, carrito, checkout (Wompi), experiencias, estadías, reservas y panel de administración.
 
-This contains everything you need to run your app locally.
+## Stack
 
-View your app in AI Studio: https://ai.studio/apps/427ebbd4-ce5d-44eb-b094-383e0937c790
+- **Frontend:** React 19 + Vite 6 + Tailwind (SPA)
+- **Backend:** Node.js + Express 4 (TypeScript)
+- **Base de datos:** MySQL
+- **Auth:** JWT en cookie httpOnly + bcrypt · 4 roles (admin, editor, support, cliente)
+- **Pagos:** Wompi
+- **Seguridad:** Helmet, CORS, rate-limit, validación express-validator
 
-## Run Locally
+El servidor Express sirve la API y, en producción, los estáticos del frontend.
 
-**Prerequisites:**  Node.js
+## Arranque rápido (local)
 
+```bash
+cp .env.example .env          # completa DB_*, JWT_SECRET, WOMPI_*, ADMIN_*
+mysql -u root -p -e "CREATE DATABASE jaguar_dev CHARACTER SET utf8mb4"
+mysql -u root -p jaguar_dev < db/schema.sql
+npm install
+npm run db:seed               # admin (desde env) + catálogo
+npm run dev                   # http://localhost:3000
+```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Despliegue
+
+👉 **La guía completa de despliegue en producción (Hostinger Business + MySQL) está en [README-DEPLOY.md](README-DEPLOY.md).**
+
+## Scripts
+
+| Comando | Descripción |
+|---------|-------------|
+| `npm run dev` | Desarrollo (Vite + API en :3000) |
+| `npm run build` | Compila frontend + server a `dist/` |
+| `npm start` | Producción (`dist/server.cjs`) |
+| `npm run db:seed` | Siembra admin + catálogo en MySQL |
+| `npm run lint` | Type-check (`tsc --noEmit`) |
+| `npm test` | Tests unitarios |

@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import { dbService } from '../db';
-import { authenticateToken, requireAdmin } from '../middleware/auth';
+import { authenticateToken, requireRole } from '../middleware/auth';
+import { slideValidation, handleValidationErrors } from '../middleware/validate';
 
 const router = Router();
 
-router.get('/', (_req, res) => {
+router.get('/', async (_req, res) => {
   try {
-    const slides = dbService.getSlides();
+    const slides = await dbService.getSlides();
     return res.json(slides || []);
   } catch (err: any) {
     console.error('[API /slides GET]', err);
@@ -14,9 +15,9 @@ router.get('/', (_req, res) => {
   }
 });
 
-router.get('/all', authenticateToken, requireAdmin, (_req, res) => {
+router.get('/all', authenticateToken, requireRole('admin', 'editor'), async (_req, res) => {
   try {
-    const slides = dbService.getAllSlides();
+    const slides = await dbService.getAllSlides();
     return res.json(slides || []);
   } catch (err: any) {
     console.error('[API /slides/all GET]', err);
@@ -24,9 +25,9 @@ router.get('/all', authenticateToken, requireAdmin, (_req, res) => {
   }
 });
 
-router.get('/:id', authenticateToken, requireAdmin, (req, res) => {
+router.get('/:id', authenticateToken, requireRole('admin', 'editor'), async (req, res) => {
   try {
-    const slide = dbService.getSlideById(req.params.id);
+    const slide = await dbService.getSlideById(req.params.id);
     if (!slide) return res.status(404).json({ error: 'Slide no encontrado.' });
     return res.json(slide);
   } catch (err: any) {
@@ -35,13 +36,10 @@ router.get('/:id', authenticateToken, requireAdmin, (req, res) => {
   }
 });
 
-router.post('/', authenticateToken, requireAdmin, (req, res) => {
+router.post('/', authenticateToken, requireRole('admin', 'editor'), slideValidation, handleValidationErrors, async (req, res) => {
   try {
     const { title, subtitle, badge, buttonText, buttonLink, button2Text, button2Link, bgImage, orden, activo } = req.body;
-    if (!title || !subtitle || !badge || !buttonText || !buttonLink || !bgImage) {
-      return res.status(400).json({ error: 'Todos los campos obligatorios deben ser diligenciados.' });
-    }
-    dbService.saveSlide({
+    await dbService.saveSlide({
       title,
       subtitle,
       badge,
@@ -51,7 +49,7 @@ router.post('/', authenticateToken, requireAdmin, (req, res) => {
       button2Link: button2Link || null,
       bgImage,
       orden: orden || 1,
-      activo: activo !== undefined ? activo : true
+      activo: activo !== undefined ? activo : true,
     });
     return res.status(201).json({ success: true, message: 'Slide creado exitosamente.' });
   } catch (err: any) {
@@ -59,16 +57,10 @@ router.post('/', authenticateToken, requireAdmin, (req, res) => {
   }
 });
 
-router.put('/:id', authenticateToken, requireAdmin, (req, res) => {
+router.put('/:id', authenticateToken, requireRole('admin', 'editor'), slideValidation, handleValidationErrors, async (req, res) => {
   try {
-    console.log(`PUT /api/slides/${req.params.id} - body: ${JSON.stringify(req.body).substring(0, 200)}`);
     const { title, subtitle, badge, buttonText, buttonLink, button2Text, button2Link, bgImage, orden, activo } = req.body;
-    if (!title || !subtitle || !badge || !buttonText || !buttonLink || !bgImage) {
-      console.log('PUT /api/slides - validation failed');
-      return res.status(400).json({ error: 'Todos los campos obligatorios deben ser diligenciados.' });
-    }
-    console.log('PUT /api/slides - calling dbService.saveSlide');
-    dbService.saveSlide({
+    await dbService.saveSlide({
       id: req.params.id,
       title,
       subtitle,
@@ -79,7 +71,7 @@ router.put('/:id', authenticateToken, requireAdmin, (req, res) => {
       button2Link: button2Link || null,
       bgImage,
       orden: orden || 1,
-      activo: activo !== undefined ? activo : true
+      activo: activo !== undefined ? activo : true,
     });
     return res.json({ success: true, message: 'Slide actualizado exitosamente.' });
   } catch (err: any) {
@@ -87,9 +79,9 @@ router.put('/:id', authenticateToken, requireAdmin, (req, res) => {
   }
 });
 
-router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
+router.delete('/:id', authenticateToken, requireRole('admin', 'editor'), async (req, res) => {
   try {
-    dbService.deleteSlide(req.params.id);
+    await dbService.deleteSlide(req.params.id);
     return res.json({ success: true, message: 'Slide eliminado.' });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });

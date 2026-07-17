@@ -18,6 +18,7 @@ import contactRoutes from './server/routes/contact';
 import orderRoutes from './server/routes/orders';
 import slideRoutes from './server/routes/slides';
 import reservationRoutes from './server/routes/reservations';
+import userRoutes from './server/routes/users';
 
 // -----------------------------------------------------------------------------
 // Global error handlers to catch ALL crashes
@@ -48,6 +49,9 @@ if (env.NODE_ENV === 'production') {
 // Security headers — relaxed in development for Vite HMR
 const helmetConfig: HelmetOptions & { crossOriginEmbedderPolicy?: boolean } = {
   crossOriginEmbedderPolicy: env.NODE_ENV === 'production' ? undefined : false,
+  strictTransportSecurity: env.NODE_ENV === 'production'
+    ? { maxAge: 31536000, includeSubDomains: true, preload: true }
+    : false,
   contentSecurityPolicy: env.NODE_ENV === 'production'
     ? {
         directives: {
@@ -67,16 +71,21 @@ const helmetConfig: HelmetOptions & { crossOriginEmbedderPolicy?: boolean } = {
 app.use(helmet(helmetConfig));
 
 // CORS — open in development, restricted in production
+app.disable('x-powered-by');
+
 app.use(cors({
   origin: env.NODE_ENV === 'production' ? env.APP_URL : true,
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
 // Rate limiting for API routes
 app.use(apiRateLimiter);
 
 // Body parsing
-app.use(express.json());
+app.use(express.json({ limit: '10kb' }));
+app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 app.use(cookieParser());
 
 // Request logging for API only
@@ -105,6 +114,7 @@ app.use('/api/contacto', contactRoutes);
 app.use('/api/ordenes', orderRoutes);
 app.use('/api/slides', slideRoutes);
 app.use('/api/reservas', reservationRoutes);
+app.use('/api/usuarios', userRoutes);
 
 // -----------------------------------------------------------------------------
 // Global error handler

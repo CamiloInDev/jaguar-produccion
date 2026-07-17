@@ -49,3 +49,12 @@ db.json.bak
 opencode.json
 .agents/
 skills-lock.json
+
+# -----------------------------------------------------------------------------
+# Documentación interna de desarrollo (solo local, no va al repo del cliente)
+# -----------------------------------------------------------------------------
+agents.md
+metadata.json
+DeployTemporal.md
+CONTEXTO.md
+TEST.md

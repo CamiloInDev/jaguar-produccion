@@ -1,13 +1,13 @@
 import { Router } from 'express';
 import { dbService } from '../db';
-import { authenticateToken, requireAdmin } from '../middleware/auth';
+import { authenticateToken, requireRole } from '../middleware/auth';
+import { productValidation, handleValidationErrors } from '../middleware/validate';
 
 const router = Router();
 
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    let products = dbService.getProducts();
-    console.log(`GET /api/productos - returning ${products.length} products`);
+    let products = await dbService.getProducts();
     const { categoria, q } = req.query;
 
     if (categoria && categoria !== 'todos') {
@@ -23,14 +23,13 @@ router.get('/', (req, res) => {
     }
     return res.json(products);
   } catch (err: any) {
-    console.log(`ERROR /api/productos: ${err}`);
     return res.status(500).json({ error: err.message });
   }
 });
 
-router.get('/:slug', (req, res) => {
+router.get('/:slug', async (req, res) => {
   try {
-    const prod = dbService.getProductBySlug(req.params.slug);
+    const prod = await dbService.getProductBySlug(req.params.slug);
     if (!prod) {
       return res.status(404).json({ error: 'Producto no encontrado.' });
     }
@@ -40,13 +39,10 @@ router.get('/:slug', (req, res) => {
   }
 });
 
-router.post('/', authenticateToken, requireAdmin, (req, res) => {
+router.post('/', authenticateToken, requireRole('admin', 'editor'), productValidation, handleValidationErrors, async (req, res) => {
   try {
     const { nombre, descripcion, precio, precio_antes, stock, categoria, origen, tueste, imagen_url, activo } = req.body;
-    if (!nombre || !descripcion || precio === undefined || stock === undefined || !categoria || !origen || !tueste || !imagen_url) {
-      return res.status(400).json({ error: 'Todos los campos son obligatorios.' });
-    }
-    dbService.saveProduct({
+    await dbService.saveProduct({
       nombre,
       descripcion,
       precio: Number(precio),
@@ -56,7 +52,7 @@ router.post('/', authenticateToken, requireAdmin, (req, res) => {
       origen,
       tueste,
       imagen_url,
-      activo: activo !== undefined ? activo : true
+      activo: activo !== undefined ? activo : true,
     });
     return res.status(201).json({ success: true, message: 'Producto creado exitosamente.' });
   } catch (err: any) {
@@ -64,14 +60,11 @@ router.post('/', authenticateToken, requireAdmin, (req, res) => {
   }
 });
 
-router.put('/:id', authenticateToken, requireAdmin, (req, res) => {
+router.put('/:id', authenticateToken, requireRole('admin', 'editor'), productValidation, handleValidationErrors, async (req, res) => {
   try {
     const id = req.params.id;
     const { nombre, descripcion, precio, precio_antes, stock, categoria, origen, tueste, imagen_url, activo } = req.body;
-    if (!nombre || !descripcion || precio === undefined || stock === undefined || !categoria || !origen || !tueste || !imagen_url) {
-      return res.status(400).json({ error: 'Todos los campos son obligatorios.' });
-    }
-    dbService.saveProduct({
+    await dbService.saveProduct({
       id,
       nombre,
       descripcion,
@@ -82,7 +75,7 @@ router.put('/:id', authenticateToken, requireAdmin, (req, res) => {
       origen,
       tueste,
       imagen_url,
-      activo: activo !== undefined ? activo : true
+      activo: activo !== undefined ? activo : true,
     });
     return res.json({ success: true, message: 'Producto actualizado exitosamente.' });
   } catch (err: any) {
@@ -90,9 +83,9 @@ router.put('/:id', authenticateToken, requireAdmin, (req, res) => {
   }
 });
 
-router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
+router.delete('/:id', authenticateToken, requireRole('admin', 'editor'), async (req, res) => {
   try {
-    dbService.deleteProduct(req.params.id);
+    await dbService.deleteProduct(req.params.id);
     return res.json({ success: true, message: 'Producto eliminado.' });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });

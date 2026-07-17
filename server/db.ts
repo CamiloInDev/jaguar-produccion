@@ -1,339 +1,217 @@
-import * as fs from 'fs';
-import * as path from 'path';
 import * as crypto from 'crypto';
-import { Product, Experience, Hacienda, User, Order, ContactMessage, OrderStatus, OrderItem, CarouselSlide, Reservation, ReservationStatus } from '../src/types';
+import bcrypt from 'bcryptjs';
+import type { RowDataPacket, ResultSetHeader } from 'mysql2';
+import { pool } from './config/db-pool';
+import {
+  Product, Experience, Hacienda, User, Order, ContactMessage,
+  OrderStatus, OrderItem, CarouselSlide, Reservation, ReservationStatus
+} from '../src/types';
 
-const LOG_FILE = path.join(process.cwd(), 'logs', 'server.log');
-
-function log(msg: string) {
-  const timestamp = new Date().toISOString();
-  const logLine = `[${timestamp}] ${msg}\n`;
-  try {
-    const dir = path.dirname(LOG_FILE);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.appendFileSync(LOG_FILE, logLine);
-  } catch {}
-  console.log(logLine.trim());
-}
-
-// Password utility to avoid native bcrypt issues on sandbox
+// -----------------------------------------------------------------------------
+// Password hashing (bcrypt) — se mantiene síncrono
+// -----------------------------------------------------------------------------
 export function hashPassword(password: string): string {
-  return crypto.pbkdf2Sync(password, 'jaguar_salt_123', 1000, 64, 'sha512').toString('hex');
+  const salt = bcrypt.genSaltSync(12);
+  return bcrypt.hashSync(password, salt);
 }
 
-const DB_FILE = path.join(process.env.NODE_ENV === 'production' ? '/app' : process.cwd(), 'db.json');
-
-interface LoginAttempt {
-  email: string;
-  count: number;
-  lastAttempt: number;
-  lockedUntil?: number;
+export function comparePassword(password: string, hash: string): boolean {
+  return bcrypt.compareSync(password, hash);
 }
 
-interface DatabaseSchema {
-  users: Array<User & { password_hash: string }>;
-  products: Product[];
-  experiences: Experience[];
-  haciendas: Hacienda[];
-  orders: Order[];
-  contactMessages: ContactMessage[];
-  slides: CarouselSlide[];
-  reservations: Reservation[];
-  loginAttempts: Record<string, LoginAttempt>;
-}
+// -----------------------------------------------------------------------------
+// Helpers de mapeo fila -> objeto tipado
+// -----------------------------------------------------------------------------
+const toBool = (v: unknown): boolean => v === true || v === 1 || v === '1';
 
-const INITIAL_DB: DatabaseSchema = {
-  users: [
-    {
-      id: 'usr_admin',
-      email: 'admin@jaguarcoffee.com',
-      password_hash: hashPassword('admin123'),
-      nombre: 'Administrador',
-      apellido: 'Jaguar',
-      telefono: '+573001234567',
-      rol: 'admin',
-      created_at: new Date().toISOString()
-    },
-    {
-      id: 'usr_cliente',
-      email: 'cliente@jaguarcoffee.com',
-      password_hash: hashPassword('cliente123'),
-      nombre: 'Mateo',
-      apellido: 'Gómez',
-      telefono: '+573159876543',
-      rol: 'cliente',
-      created_at: new Date().toISOString()
-    }
-  ],
-  products: [
-    {
-      id: 'prod_1',
-      slug: 'bolsa-institucional-lavado',
-      nombre: 'Bolsa Café Institucional (2.5 kg)',
-      descripcion: 'Proceso: Lavado. Cítrico, miel y floral, 1950 M.S.N.M Silvania - Mario Patiño. Tostión media alta. Perfil intenso con acidez cítrica.',
-      precio: 175000,
-      stock: 20,
-      categoria: 'institucional',
-      origen: 'Silvania, Cundinamarca',
-      tueste: 'Media Alta',
-      imagen_url: 'https://images.unsplash.com/photo-1610632380989-6800249be455?auto=format&fit=crop&q=80&w=600',
-      activo: true,
-      created_at: new Date().toISOString()
-    },
-    {
-      id: 'prod_2',
-      slug: 'caturra-lavado-250gr',
-      nombre: 'Caturra Lavado (250 gr)',
-      descripcion: 'Proceso: Lavado. Cítrico, miel y floral. Tostión media. Café clásico y equilibrado.',
-      precio: 90000,
-      stock: 30,
-      categoria: '250gr',
-      origen: 'Silvania, Cundinamarca',
-      tueste: 'Media',
-      imagen_url: 'https://images.unsplash.com/photo-1559056191-4819004e3827?auto=format&fit=crop&q=80&w=600',
-      activo: true,
-      created_at: new Date().toISOString()
-    },
-    {
-      id: 'prod_3',
-      slug: 'caturra-lavado-175gr',
-      nombre: 'Caturra Lavado (175 gr)',
-      descripcion: 'Proceso: Lavado. Cítrico, miel y floral. Tostión media. Café clásico y equilibrado.',
-      precio: 60000,
-      stock: 35,
-      categoria: '175gr',
-      origen: 'Silvania, Cundinamarca',
-      tueste: 'Media',
-      imagen_url: 'https://images.unsplash.com/photo-1580933181604-7fa417bd74e8?auto=format&fit=crop&q=80&w=600',
-      activo: true,
-      created_at: new Date().toISOString()
-    },
-    {
-      id: 'prod_4',
-      slug: 'jaguar-to-go-innato',
-      nombre: 'Jaguar To-Go — Innato (20 gr)',
-      descripcion: 'Coffee drip de fácil preparación. Método por goteo.',
-      precio: 5000,
-      stock: 100,
-      categoria: 'togo',
-      origen: 'Silvania, Cundinamarca',
-      tueste: 'Media',
-      imagen_url: 'https://images.unsplash.com/photo-1497935586351-b67a49e012bf?auto=format&fit=crop&q=80&w=600',
-      activo: true,
-      created_at: new Date().toISOString()
-    }
-  ],
-  experiences: [
-    {
-      id: 'exp_1',
-      slug: 'catacion',
-      nombre: 'Catación de Café de Especialidad',
-      descripcion: 'Aprende a identificar notas, aromas, acidez y cuerpo del café. Sesión guiada por catadores certificados Q-Grader con protocolos SCA. Descubrirás el fascinante mundo de los descriptores sensoriales del café colombiano, desde las frutas rojas hasta los chocolates complejos.',
-      duracion_min: 90,
-      precio: 85000,
-      capacidad_max: 8,
-      imagen_url: 'https://cafejaguar.com/wp-content/uploads/2026/01/Experiencia-de-cataciones-684x1024.webp',
-      imagenes: [
-        'https://cafejaguar.com/wp-content/uploads/2026/01/Experiencia-de-cataciones-684x1024.webp',
-        'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1442512595331-e89e73853f31?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&q=80&w=800'
-      ],
-      activo: true,
-      booking_widget: `<div class="p-6 bg-[#FFF9F5] border border-[#122C9B]/20 rounded-2xl max-w-md mx-auto text-center"><h4 class="text-lg font-bold text-[#122C9B] mb-2">Reserva tu Cata de Café</h4><p class="text-sm text-[#122C9B]/60 mb-4">Sesión guiada por catadores Q-Grader. Duración: 90 minutos.</p><button onclick="window.open('https://www.booking.com/experiences','_blank')" class="w-full py-3 bg-[#122C9B] hover:bg-[#FFA42C] text-white rounded-xl font-semibold transition-all">Reservar en Booking.com</button></div>`
-    },
-    {
-      id: 'exp_2',
-      slug: 'barismo',
-      nombre: 'Taller de Barismo',
-      descripcion: 'Domina el arte del espresso perfecto, lances de leche y latte art. Practica con máquinas profesionales bajo la guía de instructores certificados. Aprenderás a controlar la molienda, dosis, tamping y extracción para lograr el tiro perfecto.',
-      duracion_min: 120,
-      precio: 120000,
-      capacidad_max: 6,
-      imagen_url: 'https://cafejaguar.com/wp-content/uploads/2026/01/Experiencia-de-filtrados-685x1024.webp',
-      imagenes: [
-        'https://cafejaguar.com/wp-content/uploads/2026/01/Experiencia-de-filtrados-685x1024.webp',
-        'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1497935586351-b67a49e012bf?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&q=80&w=800'
-      ],
-      activo: true,
-      booking_widget: `<div class="p-6 bg-[#FFF9F5] border border-[#122C9B]/20 rounded-2xl max-w-md mx-auto text-center"><h4 class="text-lg font-bold text-[#122C9B] mb-2">Reserva Taller de Barismo</h4><p class="text-sm text-[#122C9B]/60 mb-4">Domina el espresso y latte art. Duración: 2 horas.</p><button onclick="window.open('https://www.booking.com/experiences','_blank')" class="w-full py-3 bg-[#122C9B] hover:bg-[#FFA42C] text-white rounded-xl font-semibold transition-all">Reservar en Booking.com</button></div>`
-    },
-    {
-      id: 'exp_3',
-      slug: 'tueste',
-      nombre: 'Experiencia de Tostión',
-      descripcion: 'Descubre el proceso de tueste del café verde al grano tostado. Controla curvas de temperatura y aprende a desarrollar perfiles de sabor únicos. Una experiencia práctica donde tú mismo tuestes tu propia bolsa de café para llevar.',
-      duracion_min: 90,
-      precio: 95000,
-      capacidad_max: 6,
-      imagen_url: 'https://cafejaguar.com/wp-content/uploads/2026/01/Experiencia-de-tueste-685x1024.webp',
-      imagenes: [
-        'https://cafejaguar.com/wp-content/uploads/2026/01/Experiencia-de-tueste-685x1024.webp',
-        'https://images.unsplash.com/photo-1559525839-b184a4d698c7?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1442512595331-e89e73853f31?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1504630083234-14187a9df0f5?auto=format&fit=crop&q=80&w=800'
-      ],
-      activo: true,
-      booking_widget: `<div class="p-6 bg-[#FFF9F5] border border-[#122C9B]/20 rounded-2xl max-w-md mx-auto text-center"><h4 class="text-lg font-bold text-[#122C9B] mb-2">Reserva Experiencia de Tueste</h4><p class="text-sm text-[#122C9B]/60 mb-4">Tuesta tu propio café. Duración: 90 minutos.</p><button onclick="window.open('https://www.booking.com/experiences','_blank')" class="w-full py-3 bg-[#122C9B] hover:bg-[#FFA42C] text-white rounded-xl font-semibold transition-all">Reservar en Booking.com</button></div>`
-    },
-    {
-      id: 'exp_4',
-      slug: 'coffee-tour',
-      nombre: 'Coffee Tour — Finca y Beneficio',
-      descripcion: 'Recorre los cafetales, conoce el proceso de beneficio y participa en la cosecha. Una inmersión completa en el origen del café. Descubrirás cómo el terroir, la altitud y el trabajo artesanal definen el sabor de cada taza.',
-      duracion_min: 180,
-      precio: 150000,
-      capacidad_max: 10,
-      imagen_url: 'https://cafejaguar.com/wp-content/uploads/2026/01/Tour-cafetero-684x1024.webp',
-      imagenes: [
-        'https://cafejaguar.com/wp-content/uploads/2026/01/Tour-cafetero-684x1024.webp',
-        'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1559525839-b184a4d698c7?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1524350876685-274059332603?auto=format&fit=crop&q=80&w=800'
-      ],
-      activo: true,
-      booking_widget: `<div class="p-6 bg-[#FFF9F5] border border-[#122C9B]/20 rounded-2xl max-w-md mx-auto text-center"><h4 class="text-lg font-bold text-[#122C9B] mb-2">Reserva Coffee Tour</h4><p class="text-sm text-[#122C9B]/60 mb-4">Inmersión completa en el origen. Duración: 3 horas.</p><button onclick="window.open('https://www.booking.com/experiences','_blank')" class="w-full py-3 bg-[#122C9B] hover:bg-[#FFA42C] text-white rounded-xl font-semibold transition-all">Reservar en Booking.com</button></div>`
-    },
-    {
-      id: 'exp_5',
-      slug: 'glamping',
-      nombre: 'Glamping entre Cafetales',
-      descripcion: 'Vive una noche única en nuestras fincas cafeteras con alojamiento glamping. Despierta entre cafetales con una taza de café de origen preparada en el sitio. Una experiencia de desconexión total en la naturaleza.',
-      duracion_min: 1440,
-      precio: 350000,
-      capacidad_max: 4,
-      imagen_url: 'https://cafejaguar.com/wp-content/uploads/2026/01/Tour-cafetero-684x1024.webp',
-      imagenes: [
-        'https://cafejaguar.com/wp-content/uploads/2026/01/Tour-cafetero-684x1024.webp',
-        'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1546548970-71785318a17b?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&q=80&w=800'
-      ],
-      activo: true,
-      booking_widget: `<div class="p-6 bg-[#FFF9F5] border border-[#122C9B]/20 rounded-2xl max-w-md mx-auto text-center"><h4 class="text-lg font-bold text-[#122C9B] mb-2">Reserva Glamping</h4><p class="text-sm text-[#122C9B]/60 mb-4">Noche única entre cafetales. Capacidad máx 4 personas.</p><button onclick="window.open('https://www.booking.com/experiences','_blank')" class="w-full py-3 bg-[#122C9B] hover:bg-[#FFA42C] text-white rounded-xl font-semibold transition-all">Reservar en Booking.com</button></div>`
-    },
-    {
-      id: 'exp_6',
-      slug: 'scooter-tour',
-      nombre: 'Scooter Tour — Ruta Histórica',
-      descripcion: 'Recorre en scooter eléctrico la ruta histórica del café en Colombia. Descubre haciendas coloniales, miradores naturales y pequeños pueblos cafeteros. Una aventura sobre dos ruedas que combina adrenalina y cultura cafetera.',
-      duracion_min: 240,
-      precio: 180000,
-      capacidad_max: 8,
-      imagen_url: 'https://cafejaguar.com/wp-content/uploads/2026/01/tour-historico-en-scooter-685x1024.webp',
-      imagenes: [
-        'https://cafejaguar.com/wp-content/uploads/2026/01/tour-historico-en-scooter-685x1024.webp',
-        'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1442512595331-e89e73853f31?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&q=80&w=800'
-      ],
-      activo: true,
-      booking_widget: `<div class="p-6 bg-[#FFF9F5] border border-[#122C9B]/20 rounded-2xl max-w-md mx-auto text-center"><h4 class="text-lg font-bold text-[#122C9B] mb-2">Reserva Scooter Tour</h4><p class="text-sm text-[#122C9B]/60 mb-4">Ruta histórica en scooter. Duración: 4 horas.</p><button onclick="window.open('https://www.booking.com/experiences','_blank')" class="w-full py-3 bg-[#122C9B] hover:bg-[#FFA42C] text-white rounded-xl font-semibold transition-all">Reservar en Booking.com</button></div>`
-    }
-  ],
-  haciendas: [
-    {
-      id: 'hac_1',
-      nombre: 'Hacienda El Jaguar Real',
-      descripcion: 'Una majestuosa casona cafetera del siglo XIX ubicada en Venecia, Antioquia. Rodeada de exuberante vegetación y senderos con avistamiento de aves, ofrece caminatas guiadas por los cafetales ecológicos, piscinas naturales, cabalgatas y confortables habitaciones con terraza colonial con vista a los Farallones del Citará.',
-      ubicacion: 'Venecia, Antioquia - Km 4 vía Bolombolo',
-      imagen_url: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&q=80&w=600',
-      airbnb_url: 'https://airbnb.com/rooms/mock-jaguar-real',
-      booking_url: 'https://booking.com/hotel/co/hacienda-el-jaguar-real.html'
-    },
-    {
-      id: 'hac_2',
-      nombre: 'Finca Cafetera Vista Hermosa',
-      descripcion: 'Ubicada sobre el cañón del río Cauca en Jericó, Antioquia, esta espectacular y moderna cabaña rústica te permite despertar flotando sobre un mar de nubes. El hospedaje incluye una inmersión completa de cosecha en canasto artesanal, molienda a pedal y degustación en fogata campesina.',
-      ubicacion: 'Jericó, Antioquia - Vereda La Soledad',
-      imagen_url: 'https://images.unsplash.com/photo-1546548970-71785318a17b?auto=format&fit=crop&q=80&w=600',
-      airbnb_url: 'https://airbnb.com/rooms/mock-vista-hermosa',
-      booking_url: 'https://booking.com/hotel/co/finca-vista-hermosa-jerico.html'
-    }
-],
-  orders: [],
-  contactMessages: [],
-  slides: [],
-  reservations: [],
-  loginAttempts: {}
-};
-
-// Initialize file database if it doesn't exist
-function initDb() {
-  const dir = path.dirname(DB_FILE);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+/** JSON de MySQL puede llegar como objeto (MySQL 8) o string (MariaDB). */
+function parseJson<T>(val: unknown, fallback: T): T {
+  if (val == null) return fallback;
+  if (typeof val === 'object') return val as T;
+  if (typeof val === 'string') {
+    try { return JSON.parse(val) as T; } catch { return fallback; }
   }
-  if (!fs.existsSync(DB_FILE)) {
-    fs.writeFileSync(DB_FILE, JSON.stringify(INITIAL_DB, null, 2), 'utf-8');
-  }
+  return fallback;
 }
 
-initDb();
-
-function readDb(): DatabaseSchema {
-  try {
-    if (!fs.existsSync(DB_FILE)) initDb();
-    const raw = fs.readFileSync(DB_FILE, 'utf-8');
-    const data = JSON.parse(raw);
-    let needsWrite = false;
-    if (!data.slides) {
-      data.slides = [];
-      needsWrite = true;
-    }
-    if (!data.loginAttempts) {
-      data.loginAttempts = {};
-      needsWrite = true;
-    }
-    if (!data.reservations) {
-      data.reservations = [];
-      needsWrite = true;
-    }
-    if (needsWrite) {
-      writeDb(data);
-    }
-    return data;
-  } catch (err) {
-    console.error(`ERROR readDb: ${err}`);
-    initDb();
-    return { ...INITIAL_DB, slides: [], loginAttempts: {} };
-  }
+function rowToUser(r: RowDataPacket): User {
+  return {
+    id: r.id,
+    email: r.email,
+    nombre: r.nombre,
+    apellido: r.apellido,
+    telefono: r.telefono,
+    rol: r.rol,
+    created_at: r.created_at,
+  };
 }
 
-function writeDb(data: DatabaseSchema) {
-  try {
-    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf-8');
-  } catch (err) {
-    console.error('Error writing JSON DB', err);
-  }
+function rowToProduct(r: RowDataPacket): Product {
+  return {
+    id: r.id,
+    slug: r.slug,
+    nombre: r.nombre,
+    descripcion: r.descripcion,
+    precio: Number(r.precio),
+    precio_antes: r.precio_antes == null ? undefined : Number(r.precio_antes),
+    stock: Number(r.stock),
+    categoria: r.categoria,
+    origen: r.origen,
+    tueste: r.tueste,
+    imagen_url: r.imagen_url,
+    activo: toBool(r.activo),
+    created_at: r.created_at,
+  };
 }
 
+function rowToExperience(r: RowDataPacket): Experience {
+  return {
+    id: r.id,
+    slug: r.slug,
+    nombre: r.nombre,
+    descripcion: r.descripcion,
+    duracion_min: Number(r.duracion_min),
+    precio: Number(r.precio),
+    capacidad_max: Number(r.capacidad_max),
+    booking_widget: r.booking_widget,
+    imagen_url: r.imagen_url,
+    imagenes: parseJson<string[]>(r.imagenes, []),
+    detalles_incluidos: r.detalles_incluidos == null ? undefined : parseJson<string[]>(r.detalles_incluidos, []),
+    recomendaciones: r.recomendaciones == null ? undefined : parseJson<string[]>(r.recomendaciones, []),
+    activo: toBool(r.activo),
+  };
+}
+
+function rowToHacienda(r: RowDataPacket): Hacienda {
+  return {
+    id: r.id,
+    nombre: r.nombre,
+    descripcion: r.descripcion,
+    ubicacion: r.ubicacion,
+    imagen_url: r.imagen_url,
+    airbnb_url: r.airbnb_url,
+    booking_url: r.booking_url,
+  };
+}
+
+function rowToSlide(r: RowDataPacket): CarouselSlide {
+  return {
+    id: r.id,
+    title: r.title,
+    subtitle: r.subtitle,
+    badge: r.badge,
+    buttonText: r.buttonText,
+    buttonLink: r.buttonLink,
+    button2Text: r.button2Text ?? undefined,
+    button2Link: r.button2Link ?? undefined,
+    bgImage: r.bgImage,
+    orden: Number(r.orden),
+    activo: toBool(r.activo),
+  };
+}
+
+function rowToReservation(r: RowDataPacket): Reservation {
+  return {
+    id: r.id,
+    tipo: r.tipo,
+    item_id: r.item_id,
+    item_nombre: r.item_nombre,
+    item_slug: r.item_slug,
+    fecha: r.fecha,
+    nombre: r.nombre,
+    email: r.email,
+    telefono: r.telefono,
+    cantidad_personas: Number(r.cantidad_personas),
+    estado: r.estado,
+    notas: r.notas ?? undefined,
+    created_at: r.created_at,
+  };
+}
+
+function rowToContactMessage(r: RowDataPacket): ContactMessage {
+  return {
+    id: r.id,
+    nombre: r.nombre,
+    email: r.email,
+    asunto: r.asunto,
+    mensaje: r.mensaje,
+    respondido: toBool(r.respondido),
+    created_at: r.created_at,
+  };
+}
+
+function rowToOrder(r: RowDataPacket, items: OrderItem[]): Order {
+  return {
+    id: r.id,
+    user_id: r.user_id,
+    user_email: r.user_email ?? undefined,
+    estado: r.estado,
+    total: Number(r.total),
+    wompi_transaction_id: r.wompi_transaction_id ?? undefined,
+    direccion_envio: parseJson(r.direccion_envio, {
+      direccion: '', ciudad: '', departamento: '', telefono: ''
+    }),
+    notas: r.notas ?? undefined,
+    items,
+    created_at: r.created_at,
+  };
+}
+
+/** Carga los ítems de un conjunto de órdenes agrupados por order_id. */
+async function loadOrderItems(orderIds: string[]): Promise<Record<string, OrderItem[]>> {
+  if (orderIds.length === 0) return {};
+  const [rows] = await pool.query<RowDataPacket[]>(
+    'SELECT order_id, product_id, nombre, precio_unit, cantidad FROM order_items WHERE order_id IN (?)',
+    [orderIds]
+  );
+  const grouped: Record<string, OrderItem[]> = {};
+  for (const r of rows) {
+    (grouped[r.order_id] ??= []).push({
+      product_id: r.product_id,
+      nombre: r.nombre,
+      precio_unit: Number(r.precio_unit),
+      cantidad: Number(r.cantidad),
+    });
+  }
+  return grouped;
+}
+
+const slugify = (nombre: string): string =>
+  nombre.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+// -----------------------------------------------------------------------------
+// Servicio de base de datos (MySQL) — misma interfaz pública que la versión JSON,
+// ahora con métodos asíncronos.
+// -----------------------------------------------------------------------------
 export const dbService = {
+  // --------------------------------------------------------------------------
   // Users
-  getUsers(): User[] {
-    const data = readDb();
-    return data.users.map(({ password_hash, ...u }) => u);
-  },
-  
-  getUserByEmail(email: string) {
-    const data = readDb();
-    const user = data.users.find(u => u.email.toLowerCase() === email.toLowerCase());
-    return user || null;
+  // --------------------------------------------------------------------------
+  async getUsers(): Promise<User[]> {
+    const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM users ORDER BY created_at ASC');
+    return rows.map(rowToUser);
   },
 
-  getUserById(id: string) {
-    const data = readDb();
-    const user = data.users.find(u => u.id === id);
-    if (!user) return null;
-    const { password_hash, ...safeUser } = user;
-    return safeUser;
+  async getUserByEmail(email: string): Promise<(User & { password_hash: string }) | null> {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      'SELECT * FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1',
+      [email]
+    );
+    if (rows.length === 0) return null;
+    const r = rows[0];
+    return { ...rowToUser(r), password_hash: r.password_hash };
   },
 
-  createUser(user: { email: string; password_hash: string; nombre: string; apellido: string; telefono?: string; rol?: 'cliente' | 'admin' }) {
-    const data = readDb();
-    const newUser: DatabaseSchema['users'][0] = {
+  async getUserById(id: string): Promise<User | null> {
+    const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM users WHERE id = ? LIMIT 1', [id]);
+    return rows.length ? rowToUser(rows[0]) : null;
+  },
+
+  async createUser(user: {
+    email: string; password_hash: string; nombre: string; apellido: string;
+    telefono?: string; rol?: 'admin' | 'editor' | 'support' | 'cliente';
+  }): Promise<User> {
+    const newUser = {
       id: 'usr_' + crypto.randomUUID(),
       email: user.email,
       password_hash: user.password_hash,
@@ -341,392 +219,426 @@ export const dbService = {
       apellido: user.apellido,
       telefono: user.telefono || '',
       rol: user.rol || 'cliente',
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
     };
-    data.users.push(newUser);
-    writeDb(data);
-    const { password_hash, ...safeUser } = newUser;
-    return safeUser;
+    await pool.query('INSERT INTO users SET ?', [newUser]);
+    const { password_hash, ...safe } = newUser;
+    return safe as User;
   },
 
-  updateUserProfile(userId: string, updates: { nombre: string; apellido: string; telefono?: string }) {
-    const data = readDb();
-    const userIdx = data.users.findIndex(u => u.id === userId);
-    if (userIdx === -1) return null;
-    
-    data.users[userIdx] = {
-      ...data.users[userIdx],
-      nombre: updates.nombre,
-      apellido: updates.apellido,
-      telefono: updates.telefono || ''
-    };
-    
-    writeDb(data);
-    const { password_hash, ...safeUser } = data.users[userIdx];
-    return safeUser;
+  async updateUserProfile(userId: string, updates: { nombre: string; apellido: string; telefono?: string }): Promise<User | null> {
+    const [res] = await pool.query<ResultSetHeader>(
+      'UPDATE users SET nombre = ?, apellido = ?, telefono = ? WHERE id = ?',
+      [updates.nombre, updates.apellido, updates.telefono || '', userId]
+    );
+    if (res.affectedRows === 0) return null;
+    return this.getUserById(userId);
   },
 
+  async getAllUsers(): Promise<User[]> {
+    return this.getUsers();
+  },
+
+  async updateUserRole(userId: string, newRole: 'admin' | 'editor' | 'support' | 'cliente'): Promise<User | null> {
+    const [res] = await pool.query<ResultSetHeader>('UPDATE users SET rol = ? WHERE id = ?', [newRole, userId]);
+    if (res.affectedRows === 0) return null;
+    return this.getUserById(userId);
+  },
+
+  async deleteUser(userId: string): Promise<boolean> {
+    const [res] = await pool.query<ResultSetHeader>('DELETE FROM users WHERE id = ?', [userId]);
+    return res.affectedRows > 0;
+  },
+
+  // --------------------------------------------------------------------------
   // Products
-  getProducts(): Product[] {
-    return readDb().products;
+  // --------------------------------------------------------------------------
+  async getProducts(): Promise<Product[]> {
+    const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM products ORDER BY created_at ASC');
+    return rows.map(rowToProduct);
   },
 
-  getProductBySlug(slug: string): Product | null {
-    const p = readDb().products.find(x => x.slug === slug);
-    return (p && p.activo) ? p : null;
+  async getProductBySlug(slug: string): Promise<Product | null> {
+    const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM products WHERE slug = ? LIMIT 1', [slug]);
+    if (rows.length === 0) return null;
+    const p = rowToProduct(rows[0]);
+    return p.activo ? p : null;
   },
 
-  getProductById(id: string): Product | null {
-    return readDb().products.find(x => x.id === id) || null;
+  async getProductById(id: string): Promise<Product | null> {
+    const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM products WHERE id = ? LIMIT 1', [id]);
+    return rows.length ? rowToProduct(rows[0]) : null;
   },
 
-  saveProduct(prod: Omit<Product, 'id' | 'created_at' | 'slug'> & { id?: string }) {
-    const data = readDb();
+  async saveProduct(prod: Omit<Product, 'id' | 'created_at' | 'slug'> & { id?: string }): Promise<void> {
+    const slug = slugify(prod.nombre);
     if (prod.id) {
-      // Edit
-      const idx = data.products.findIndex(x => x.id === prod.id);
-      if (idx !== -1) {
-        data.products[idx] = {
-          ...data.products[idx],
-          ...prod,
-          slug: prod.nombre.toLowerCase().replace(/[^a-z0-9]+/g, '-')
-        } as Product;
-      }
+      await pool.query(
+        `UPDATE products SET nombre = ?, slug = ?, descripcion = ?, precio = ?, precio_antes = ?,
+         stock = ?, categoria = ?, origen = ?, tueste = ?, imagen_url = ?, activo = ? WHERE id = ?`,
+        [prod.nombre, slug, prod.descripcion, prod.precio, prod.precio_antes ?? null,
+         prod.stock, prod.categoria, prod.origen, prod.tueste, prod.imagen_url,
+         prod.activo !== undefined ? (prod.activo ? 1 : 0) : 1, prod.id]
+      );
     } else {
-      // Create
-      const newProd: Product = {
-        ...prod,
+      await pool.query('INSERT INTO products SET ?', [{
         id: 'prod_' + crypto.randomUUID(),
-        slug: prod.nombre.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-        activo: prod.activo !== undefined ? prod.activo : true,
-        created_at: new Date().toISOString()
-      };
-      data.products.push(newProd);
+        slug,
+        nombre: prod.nombre,
+        descripcion: prod.descripcion,
+        precio: prod.precio,
+        precio_antes: prod.precio_antes ?? null,
+        stock: prod.stock,
+        categoria: prod.categoria,
+        origen: prod.origen,
+        tueste: prod.tueste,
+        imagen_url: prod.imagen_url,
+        activo: prod.activo !== undefined ? (prod.activo ? 1 : 0) : 1,
+        created_at: new Date().toISOString(),
+      }]);
     }
-    writeDb(data);
   },
 
-  deleteProduct(id: string) {
-    const data = readDb();
-    // Soft delete or hard delete
-    data.products = data.products.filter(x => x.id !== id);
-    writeDb(data);
+  async deleteProduct(id: string): Promise<void> {
+    await pool.query('DELETE FROM products WHERE id = ?', [id]);
   },
 
+  // --------------------------------------------------------------------------
   // Experiences
-  getExperiences(): Experience[] {
-    return readDb().experiences;
+  // --------------------------------------------------------------------------
+  async getExperiences(): Promise<Experience[]> {
+    const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM experiences');
+    return rows.map(rowToExperience);
   },
 
-  getExperienceBySlug(slug: string): Experience | null {
-    return readDb().experiences.find(x => x.slug === slug) || null;
+  async getExperienceBySlug(slug: string): Promise<Experience | null> {
+    const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM experiences WHERE slug = ? LIMIT 1', [slug]);
+    return rows.length ? rowToExperience(rows[0]) : null;
   },
 
-  saveExperience(exp: Omit<Experience, 'id' | 'slug'> & { id?: string }) {
-    const data = readDb();
+  async saveExperience(exp: Omit<Experience, 'id' | 'slug'> & { id?: string }): Promise<void> {
+    const slug = slugify(exp.nombre);
+    const imagenes = JSON.stringify(exp.imagenes || []);
+    const detalles = exp.detalles_incluidos ? JSON.stringify(exp.detalles_incluidos) : null;
+    const recomendaciones = exp.recomendaciones ? JSON.stringify(exp.recomendaciones) : null;
     if (exp.id) {
-      const idx = data.experiences.findIndex(x => x.id === exp.id);
-      if (idx !== -1) {
-        data.experiences[idx] = {
-          ...data.experiences[idx],
-          ...exp,
-          slug: exp.nombre.toLowerCase().replace(/[^a-z0-9]+/g, '-')
-        } as Experience;
-      }
+      await pool.query(
+        `UPDATE experiences SET nombre = ?, slug = ?, descripcion = ?, duracion_min = ?, precio = ?,
+         capacidad_max = ?, booking_widget = ?, imagen_url = ?, imagenes = ?, detalles_incluidos = ?,
+         recomendaciones = ?, activo = ? WHERE id = ?`,
+        [exp.nombre, slug, exp.descripcion, exp.duracion_min, exp.precio, exp.capacidad_max,
+         exp.booking_widget, exp.imagen_url, imagenes, detalles, recomendaciones,
+         exp.activo !== undefined ? (exp.activo ? 1 : 0) : 1, exp.id]
+      );
     } else {
-      const newExp: Experience = {
-        ...exp,
-        id: 'exp_' + crypto.randomUUID(),
-        slug: exp.nombre.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-        activo: exp.activo !== undefined ? exp.activo : true
-      };
-      data.experiences.push(newExp);
+      await pool.query(
+        `INSERT INTO experiences (id, slug, nombre, descripcion, duracion_min, precio, capacidad_max,
+         booking_widget, imagen_url, imagenes, detalles_incluidos, recomendaciones, activo)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ['exp_' + crypto.randomUUID(), slug, exp.nombre, exp.descripcion, exp.duracion_min, exp.precio,
+         exp.capacidad_max, exp.booking_widget, exp.imagen_url, imagenes, detalles, recomendaciones,
+         exp.activo !== undefined ? (exp.activo ? 1 : 0) : 1]
+      );
     }
-    writeDb(data);
   },
 
-  deleteExperience(id: string) {
-    const data = readDb();
-    data.experiences = data.experiences.filter(x => x.id !== id);
-    writeDb(data);
+  async deleteExperience(id: string): Promise<void> {
+    await pool.query('DELETE FROM experiences WHERE id = ?', [id]);
   },
 
+  // --------------------------------------------------------------------------
   // Haciendas
-  getHaciendas(): Hacienda[] {
-    return readDb().haciendas;
+  // --------------------------------------------------------------------------
+  async getHaciendas(): Promise<Hacienda[]> {
+    const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM haciendas');
+    return rows.map(rowToHacienda);
   },
 
-  // Messages
-  saveContactMessage(msg: Omit<ContactMessage, 'id' | 'created_at' | 'respondido'>) {
-    const data = readDb();
+  // --------------------------------------------------------------------------
+  // Contact messages
+  // --------------------------------------------------------------------------
+  async saveContactMessage(msg: Omit<ContactMessage, 'id' | 'created_at' | 'respondido'>): Promise<ContactMessage> {
     const newMsg: ContactMessage = {
-      ...msg,
       id: 'msg_' + crypto.randomUUID(),
+      nombre: msg.nombre,
+      email: msg.email,
+      asunto: msg.asunto,
+      mensaje: msg.mensaje,
       respondido: false,
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
     };
-    data.contactMessages.push(newMsg);
-    writeDb(data);
+    await pool.query('INSERT INTO contact_messages SET ?', [{ ...newMsg, respondido: 0 }]);
     return newMsg;
   },
 
-  getContactMessages() {
-    return readDb().contactMessages;
+  async getContactMessages(): Promise<ContactMessage[]> {
+    const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM contact_messages ORDER BY created_at DESC');
+    return rows.map(rowToContactMessage);
   },
 
-  markMessageAsRead(id: string) {
-    const data = readDb();
-    const idx = data.contactMessages.findIndex(x => x.id === id);
-    if (idx !== -1) {
-      data.contactMessages[idx].respondido = true;
-      writeDb(data);
-    }
+  async markMessageAsRead(id: string): Promise<void> {
+    await pool.query('UPDATE contact_messages SET respondido = 1 WHERE id = ?', [id]);
   },
 
+  // --------------------------------------------------------------------------
   // Orders
-  getOrders(): Order[] {
-    const db = readDb();
-    return db.orders.map(order => {
-      const user = db.users.find(u => u.id === order.user_id);
-      return {
-        ...order,
-        user_email: user?.email || 'N/A'
-      };
-    });
+  // --------------------------------------------------------------------------
+  async getOrders(): Promise<Order[]> {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT o.*, u.email AS user_email FROM orders o
+       LEFT JOIN users u ON u.id = o.user_id ORDER BY o.created_at DESC`
+    );
+    const items = await loadOrderItems(rows.map(r => r.id));
+    return rows.map(r => rowToOrder(r, items[r.id] || []));
   },
 
-  getUserOrders(userId: string): Order[] {
-    return readDb().orders.filter(x => x.user_id === userId);
+  async getUserOrders(userId: string): Promise<Order[]> {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      'SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC',
+      [userId]
+    );
+    const items = await loadOrderItems(rows.map(r => r.id));
+    return rows.map(r => rowToOrder(r, items[r.id] || []));
   },
 
-  getOrderById(id: string): Order | null {
-    const o = readDb().orders.find(x => x.id === id);
-    return o || null;
+  async getOrderById(id: string): Promise<Order | null> {
+    const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM orders WHERE id = ? LIMIT 1', [id]);
+    if (rows.length === 0) return null;
+    const items = await loadOrderItems([id]);
+    return rowToOrder(rows[0], items[id] || []);
   },
 
-  createOrder(order: Omit<Order, 'id' | 'created_at' | 'estado'> & { id?: string, estado?: OrderStatus }) {
-    const data = readDb();
-    const newOrder: Order = {
-      ...order,
-      id: order.id || 'ORDER-' + Date.now().toString(),
-      estado: order.estado || 'pendiente',
-      created_at: new Date().toISOString()
-    };
-    data.orders.push(newOrder);
+  async createOrder(order: Omit<Order, 'id' | 'created_at' | 'estado'> & { id?: string; estado?: OrderStatus }): Promise<Order> {
+    const id = order.id || 'ORDER-' + Date.now().toString();
+    const estado: OrderStatus = order.estado || 'pendiente';
+    const created_at = new Date().toISOString();
 
-    // If order was fully paid, deduct stock!
-    if (newOrder.estado === 'pagado') {
-      this.deductProductStock(newOrder.items, data);
-    }
-
-    writeDb(data);
-    return newOrder;
-  },
-
-  updateOrderState(id: string, estado: OrderStatus) {
-    const data = readDb();
-    const idx = data.orders.findIndex(x => x.id === id);
-    if (idx !== -1) {
-      const previousState = data.orders[idx].estado;
-      data.orders[idx].estado = estado;
-      
-      // Stock deduction if transition became approved/paid
-      if (estado === 'pagado' && previousState !== 'pagado') {
-        this.deductProductStock(data.orders[idx].items, data);
-      }
-      
-      writeDb(data);
-      return data.orders[idx];
-    }
-    return null;
-  },
-
-  deductProductStock(items: OrderItem[], data: DatabaseSchema) {
-    for (const item of items) {
-      const prod = data.products.find(p => p.id === item.product_id);
-      if (prod) {
-        prod.stock = Math.max(0, prod.stock - item.cantidad);
-      }
-    }
-  },
-
-  // Slides / Carousel
-  getSlides(): CarouselSlide[] {
+    const conn = await pool.getConnection();
     try {
-      const data = readDb();
-      if (!data.slides || !Array.isArray(data.slides)) {
-        log('WARN: slides is not an array, returning empty');
-        return [];
+      await conn.beginTransaction();
+      await conn.query(
+        `INSERT INTO orders (id, user_id, estado, total, wompi_transaction_id, direccion_envio, notas, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, order.user_id, estado, order.total, order.wompi_transaction_id ?? null,
+         JSON.stringify(order.direccion_envio), order.notas ?? null, created_at]
+      );
+      for (const item of order.items) {
+        await conn.query(
+          'INSERT INTO order_items (order_id, product_id, nombre, precio_unit, cantidad) VALUES (?, ?, ?, ?, ?)',
+          [id, item.product_id, item.nombre, item.precio_unit, item.cantidad]
+        );
       }
-      return data.slides
-        .filter(s => s && s.activo === true)
-        .sort((a, b) => (a.orden || 0) - (b.orden || 0));
-    } catch (err) {
-      log(`ERROR getSlides: ${err}`);
-      return [];
-    }
-  },
-
-  getAllSlides(): CarouselSlide[] {
-    try {
-      const data = readDb();
-      if (!data.slides || !Array.isArray(data.slides)) {
-        log('WARN: slides is not an array, returning empty');
-        return [];
-      }
-      return data.slides
-        .filter(s => s)
-        .sort((a, b) => (a.orden || 0) - (b.orden || 0));
-    } catch (err) {
-      log(`ERROR getAllSlides: ${err}`);
-      return [];
-    }
-  },
-
-  getSlideById(id: string): CarouselSlide | null {
-    return readDb().slides.find(s => s.id === id) || null;
-  },
-
-  saveSlide(slide: Omit<CarouselSlide, 'id'> & { id?: string }) {
-    try {
-      const data = readDb();
-      if (!data.slides) {
-        data.slides = [];
-      }
-      
-      if (slide.id) {
-        const idx = data.slides.findIndex(s => s && s.id === slide.id);
-        if (idx !== -1) {
-          data.slides[idx] = { ...data.slides[idx], ...slide };
-        } else {
-          log(`WARN: Slide not found for update: ${slide.id}`);
+      if (estado === 'pagado') {
+        for (const item of order.items) {
+          await conn.query('UPDATE products SET stock = GREATEST(0, stock - ?) WHERE id = ?', [item.cantidad, item.product_id]);
         }
-      } else {
-        const newSlide: CarouselSlide = {
-          title: slide.title || '',
-          subtitle: slide.subtitle || '',
-          badge: slide.badge || '',
-          buttonText: slide.buttonText || '',
-          buttonLink: slide.buttonLink || '/',
-          button2Text: slide.button2Text || null,
-          button2Link: slide.button2Link || null,
-          bgImage: slide.bgImage || '',
-          orden: slide.orden || data.slides.length + 1,
-          activo: slide.activo !== undefined ? slide.activo : true,
-          id: 'slide_' + crypto.randomUUID(),
-        };
-        data.slides.push(newSlide);
       }
-      writeDb(data);
+      await conn.commit();
     } catch (err) {
-      log(`ERROR saveSlide: ${err}`);
+      await conn.rollback();
       throw err;
+    } finally {
+      conn.release();
+    }
+
+    return {
+      id,
+      user_id: order.user_id,
+      estado,
+      total: order.total,
+      wompi_transaction_id: order.wompi_transaction_id,
+      direccion_envio: order.direccion_envio,
+      notas: order.notas,
+      items: order.items,
+      created_at,
+    };
+  },
+
+  async updateOrderState(id: string, estado: OrderStatus): Promise<Order | null> {
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      const [rows] = await conn.query<RowDataPacket[]>('SELECT estado FROM orders WHERE id = ? LIMIT 1 FOR UPDATE', [id]);
+      if (rows.length === 0) {
+        await conn.rollback();
+        return null;
+      }
+      const previousState = rows[0].estado as OrderStatus;
+      await conn.query('UPDATE orders SET estado = ? WHERE id = ?', [estado, id]);
+
+      if (estado === 'pagado' && previousState !== 'pagado') {
+        const [itemRows] = await conn.query<RowDataPacket[]>(
+          'SELECT product_id, cantidad FROM order_items WHERE order_id = ?', [id]
+        );
+        for (const item of itemRows) {
+          await conn.query('UPDATE products SET stock = GREATEST(0, stock - ?) WHERE id = ?', [item.cantidad, item.product_id]);
+        }
+      }
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+    return this.getOrderById(id);
+  },
+
+  // --------------------------------------------------------------------------
+  // Slides / Carousel
+  // --------------------------------------------------------------------------
+  async getSlides(): Promise<CarouselSlide[]> {
+    const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM slides WHERE activo = 1 ORDER BY orden ASC');
+    return rows.map(rowToSlide);
+  },
+
+  async getAllSlides(): Promise<CarouselSlide[]> {
+    const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM slides ORDER BY orden ASC');
+    return rows.map(rowToSlide);
+  },
+
+  async getSlideById(id: string): Promise<CarouselSlide | null> {
+    const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM slides WHERE id = ? LIMIT 1', [id]);
+    return rows.length ? rowToSlide(rows[0]) : null;
+  },
+
+  async saveSlide(slide: Omit<CarouselSlide, 'id'> & { id?: string }): Promise<void> {
+    if (slide.id) {
+      await pool.query(
+        `UPDATE slides SET title = ?, subtitle = ?, badge = ?, buttonText = ?, buttonLink = ?,
+         button2Text = ?, button2Link = ?, bgImage = ?, orden = ?, activo = ? WHERE id = ?`,
+        [slide.title || '', slide.subtitle || '', slide.badge || '', slide.buttonText || '',
+         slide.buttonLink || '/', slide.button2Text || null, slide.button2Link || null,
+         slide.bgImage || '', slide.orden ?? 1, slide.activo !== undefined ? (slide.activo ? 1 : 0) : 1, slide.id]
+      );
+    } else {
+      await pool.query('INSERT INTO slides SET ?', [{
+        id: 'slide_' + crypto.randomUUID(),
+        title: slide.title || '',
+        subtitle: slide.subtitle || '',
+        badge: slide.badge || '',
+        buttonText: slide.buttonText || '',
+        buttonLink: slide.buttonLink || '/',
+        button2Text: slide.button2Text || null,
+        button2Link: slide.button2Link || null,
+        bgImage: slide.bgImage || '',
+        orden: slide.orden ?? 1,
+        activo: slide.activo !== undefined ? (slide.activo ? 1 : 0) : 1,
+      }]);
     }
   },
 
-  deleteSlide(id: string) {
-    const data = readDb();
-    data.slides = data.slides.filter(s => s.id !== id);
-    writeDb(data);
+  async deleteSlide(id: string): Promise<void> {
+    await pool.query('DELETE FROM slides WHERE id = ?', [id]);
   },
 
+  // --------------------------------------------------------------------------
   // Security: Login attempts management
+  // --------------------------------------------------------------------------
   MAX_LOGIN_ATTEMPTS: 5,
   LOCKOUT_DURATION_MS: 15 * 60 * 1000, // 15 minutes
 
-  checkLoginAttempt(email: string): { blocked: boolean; remainingAttempts: number; lockoutRemaining?: number } {
-    const data = readDb();
-    const attempt = (data.loginAttempts || {})[email.toLowerCase()];
-    
-    if (!attempt) {
+  async checkLoginAttempt(email: string): Promise<{ blocked: boolean; remainingAttempts: number; lockoutRemaining?: number }> {
+    const key = email.toLowerCase();
+    const [rows] = await pool.query<RowDataPacket[]>('SELECT count, locked_until FROM login_attempts WHERE email = ? LIMIT 1', [key]);
+    if (rows.length === 0) {
       return { blocked: false, remainingAttempts: this.MAX_LOGIN_ATTEMPTS };
     }
+    const attempt = rows[0];
+    const now = Date.now();
+    const lockedUntil = attempt.locked_until == null ? null : Number(attempt.locked_until);
 
-    // Check if currently locked out
-    if (attempt.lockedUntil && attempt.lockedUntil > Date.now()) {
-      const remaining = Math.ceil((attempt.lockedUntil - Date.now()) / 1000 / 60);
+    if (lockedUntil && lockedUntil > now) {
+      const remaining = Math.ceil((lockedUntil - now) / 1000 / 60);
       return { blocked: true, remainingAttempts: 0, lockoutRemaining: remaining };
     }
 
-    // Reset if lockout expired
-    if (attempt.lockedUntil && attempt.lockedUntil <= Date.now()) {
-      data.loginAttempts[email.toLowerCase()] = { email: email.toLowerCase(), count: 0, lastAttempt: Date.now() };
-      writeDb(data);
+    if (lockedUntil && lockedUntil <= now) {
+      await pool.query('UPDATE login_attempts SET count = 0, last_attempt = ?, locked_until = NULL WHERE email = ?', [now, key]);
       return { blocked: false, remainingAttempts: this.MAX_LOGIN_ATTEMPTS };
     }
 
-    return { blocked: false, remainingAttempts: this.MAX_LOGIN_ATTEMPTS - attempt.count };
+    return { blocked: false, remainingAttempts: this.MAX_LOGIN_ATTEMPTS - Number(attempt.count) };
   },
 
-  recordFailedLogin(email: string): number {
-    const data = readDb();
+  async recordFailedLogin(email: string): Promise<number> {
     const key = email.toLowerCase();
-    const attempt = (data.loginAttempts || {})[key];
+    const now = Date.now();
+    const [rows] = await pool.query<RowDataPacket[]>('SELECT count FROM login_attempts WHERE email = ? LIMIT 1', [key]);
 
-    if (!attempt) {
-      data.loginAttempts[key] = { email: key, count: 1, lastAttempt: Date.now() };
-    } else {
-      attempt.count += 1;
-      attempt.lastAttempt = Date.now();
-
-      // Lock out if max attempts reached
-      if (attempt.count >= this.MAX_LOGIN_ATTEMPTS) {
-        attempt.lockedUntil = Date.now() + this.LOCKOUT_DURATION_MS;
-        console.log(`[SECURITY] Account locked for ${email} due to ${attempt.count} failed attempts`);
-      }
+    if (rows.length === 0) {
+      await pool.query('INSERT INTO login_attempts (email, count, last_attempt) VALUES (?, 1, ?)', [key, now]);
+      return this.MAX_LOGIN_ATTEMPTS - 1;
     }
 
-    writeDb(data);
-    return this.MAX_LOGIN_ATTEMPTS - (attempt?.count || 1);
+    const count = Number(rows[0].count) + 1;
+    const lockedUntil = count >= this.MAX_LOGIN_ATTEMPTS ? now + this.LOCKOUT_DURATION_MS : null;
+    await pool.query('UPDATE login_attempts SET count = ?, last_attempt = ?, locked_until = ? WHERE email = ?', [count, now, lockedUntil, key]);
+
+    if (lockedUntil) {
+      console.log(`[SECURITY] Account locked for ${email} due to ${count} failed attempts`);
+    }
+    return this.MAX_LOGIN_ATTEMPTS - count;
   },
 
-  clearLoginAttempts(email: string) {
-    const data = readDb();
-    delete (data.loginAttempts || {})[email.toLowerCase()];
-    writeDb(data);
+  async clearLoginAttempts(email: string): Promise<void> {
+    await pool.query('DELETE FROM login_attempts WHERE email = ?', [email.toLowerCase()]);
   },
 
+  // --------------------------------------------------------------------------
   // Reservations / Booking Calendar
-  createReservation(reservation: Omit<Reservation, 'id' | 'estado' | 'created_at'>) {
-    const data = readDb();
+  // --------------------------------------------------------------------------
+  async createReservation(reservation: Omit<Reservation, 'id' | 'estado' | 'created_at'>): Promise<Reservation> {
     const newReservation: Reservation = {
-      ...reservation,
       id: 'res_' + crypto.randomUUID(),
+      tipo: reservation.tipo,
+      item_id: reservation.item_id,
+      item_nombre: reservation.item_nombre,
+      item_slug: reservation.item_slug,
+      fecha: reservation.fecha,
+      nombre: reservation.nombre,
+      email: reservation.email,
+      telefono: reservation.telefono,
+      cantidad_personas: reservation.cantidad_personas,
+      notas: reservation.notas,
       estado: 'pendiente',
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
     };
-    data.reservations.push(newReservation);
-    writeDb(data);
+    await pool.query(
+      `INSERT INTO reservations (id, tipo, item_id, item_nombre, item_slug, fecha, nombre, email,
+       telefono, cantidad_personas, estado, notas, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [newReservation.id, newReservation.tipo, newReservation.item_id, newReservation.item_nombre,
+       newReservation.item_slug, newReservation.fecha, newReservation.nombre, newReservation.email,
+       newReservation.telefono, newReservation.cantidad_personas, newReservation.estado,
+       newReservation.notas ?? null, newReservation.created_at]
+    );
     return newReservation;
   },
 
-  getReservations(): Reservation[] {
-    return readDb().reservations.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  async getReservations(): Promise<Reservation[]> {
+    const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM reservations ORDER BY created_at DESC');
+    return rows.map(rowToReservation);
   },
 
-  getReservationsByItem(tipo: Reservation['tipo'], item_id: string, from?: string, to?: string): Reservation[] {
-    return readDb().reservations.filter(r => {
-      if (r.tipo !== tipo || r.item_id !== item_id) return false;
-      if (r.estado === 'cancelada') return false;
-      if (from && r.fecha < from) return false;
-      if (to && r.fecha > to) return false;
-      return true;
-    });
+  async getReservationsByItem(tipo: Reservation['tipo'], item_id: string, from?: string, to?: string): Promise<Reservation[]> {
+    let sql = "SELECT * FROM reservations WHERE tipo = ? AND item_id = ? AND estado <> 'cancelada'";
+    const params: unknown[] = [tipo, item_id];
+    if (from) { sql += ' AND fecha >= ?'; params.push(from); }
+    if (to) { sql += ' AND fecha <= ?'; params.push(to); }
+    const [rows] = await pool.query<RowDataPacket[]>(sql, params);
+    return rows.map(rowToReservation);
   },
 
-  getOccupiedDates(tipo: Reservation['tipo'], item_id: string): string[] {
-    const reservations = this.getReservationsByItem(tipo, item_id);
+  async getOccupiedDates(tipo: Reservation['tipo'], item_id: string): Promise<string[]> {
+    const reservations = await this.getReservationsByItem(tipo, item_id);
     return [...new Set<string>(reservations.map(r => r.fecha))];
   },
 
-  updateReservationState(id: string, estado: ReservationStatus) {
-    const data = readDb();
-    const idx = data.reservations.findIndex(r => r.id === id);
-    if (idx !== -1) {
-      data.reservations[idx].estado = estado;
-      writeDb(data);
-      return data.reservations[idx];
-    }
-    return null;
-  }
+  async updateReservationState(id: string, estado: ReservationStatus): Promise<Reservation | null> {
+    const [res] = await pool.query<ResultSetHeader>('UPDATE reservations SET estado = ? WHERE id = ?', [estado, id]);
+    if (res.affectedRows === 0) return null;
+    const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM reservations WHERE id = ? LIMIT 1', [id]);
+    return rows.length ? rowToReservation(rows[0]) : null;
+  },
 };
