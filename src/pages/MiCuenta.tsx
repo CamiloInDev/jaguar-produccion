@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../store';
 import { useNavigate } from 'react-router-dom';
-import { User, ClipboardList, PenTool, KeyRound, Calendar, ShoppingBag, MapPin, Eye } from 'lucide-react';
+import { User, ClipboardList, PenTool, KeyRound, Calendar, ShoppingBag, MapPin, Eye, AlertTriangle } from 'lucide-react';
 import { Order } from '../types';
 import axios from 'axios';
 
 export default function MiCuenta() {
-  const { user, updateProfile } = useAuthStore();
+  const { user, updateProfile, changePassword } = useAuthStore();
   const navigate = useNavigate();
 
   const [orders, setOrders] = useState<Order[]>([]);
@@ -18,6 +18,13 @@ export default function MiCuenta() {
   const [apellido, setApellido] = useState(user?.apellido || '');
   const [telefono, setTelefono] = useState(user?.telefono || '');
   const [profileMsg, setProfileMsg] = useState<{ type: 'ok' | 'err', text: string } | null>(null);
+
+  // Change password fields
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [passwordMsg, setPasswordMsg] = useState<{ type: 'ok' | 'err', text: string } | null>(null);
+  const [changingPassword, setChangingPassword] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -46,6 +53,29 @@ export default function MiCuenta() {
       setProfileMsg({ type: 'ok', text: '✓ Perfil actualizado exitosamente.' });
     } catch (err: any) {
       setProfileMsg({ type: 'err', text: err.message || 'Error actualizando el perfil.' });
+    }
+  };
+
+  const handleChangePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordMsg(null);
+
+    if (newPassword !== confirmNewPassword) {
+      setPasswordMsg({ type: 'err', text: 'Las contraseñas nuevas no coinciden.' });
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      await changePassword(currentPassword, newPassword);
+      setPasswordMsg({ type: 'ok', text: '✓ Contraseña actualizada exitosamente.' });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+    } catch (err: any) {
+      setPasswordMsg({ type: 'err', text: err.message || 'Error cambiando la contraseña.' });
+    } finally {
+      setChangingPassword(false);
     }
   };
 
@@ -279,6 +309,66 @@ export default function MiCuenta() {
                 className="px-6 py-3 bg-[#122C9B] hover:bg-[#FFA42C] border border-stone-950 text-white text-xs font-semibold rounded-xl cursor-pointer"
               >
                 Actualizar Mis Datos
+              </button>
+            </form>
+
+            <h2 className="font-display text-xl font-bold text-stone-900 border-b border-stone-100 pb-3 pt-10 flex items-center gap-2">
+              <KeyRound className="w-5 h-5 text-[#FFA42C]" />
+              <span>Cambiar Contraseña</span>
+            </h2>
+
+            <form onSubmit={handleChangePasswordSubmit} className="space-y-5 pt-6 max-w-lg">
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Contraseña Actual</label>
+                <input
+                  type="password"
+                  required
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-sm text-stone-900"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Nueva Contraseña</label>
+                  <input
+                    type="password"
+                    required
+                    minLength={8}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-sm text-stone-900"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Confirmar Nueva</label>
+                  <input
+                    type="password"
+                    required
+                    minLength={8}
+                    value={confirmNewPassword}
+                    onChange={(e) => setConfirmNewPassword(e.target.value)}
+                    className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-sm text-stone-900"
+                  />
+                </div>
+              </div>
+
+              {passwordMsg && (
+                <div className={`p-3 rounded-lg text-xs font-medium font-mono border flex items-start gap-2 ${
+                  passwordMsg.type === 'ok' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-800'
+                }`}>
+                  {passwordMsg.type === 'err' && <AlertTriangle className="w-4 h-4 flex-shrink-0" />}
+                  <span>{passwordMsg.text}</span>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={changingPassword}
+                className="px-6 py-3 bg-[#122C9B] hover:bg-[#FFA42C] border border-stone-950 text-white text-xs font-semibold rounded-xl cursor-pointer"
+              >
+                {changingPassword ? 'Actualizando...' : 'Cambiar Contraseña'}
               </button>
             </form>
           </div>

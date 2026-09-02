@@ -2,9 +2,14 @@ import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import { dbService, hashPassword, comparePassword } from '../db';
 import { env } from '../config/env';
+import { sendPasswordResetEmail } from '../config/mailer';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
 import { authRateLimiter } from '../middleware/rateLimiter';
-import { registerValidation, loginValidation, profileUpdateValidation, handleValidationErrors } from '../middleware/validate';
+import {
+  registerValidation, loginValidation, profileUpdateValidation,
+  requestPasswordResetValidation, resetPasswordValidation, changePasswordValidation,
+  handleValidationErrors,
+} from '../middleware/validate';
 
 /** Rutas de autenticación: registro, login, logout, perfil, recuperación */
 const router = Router();
@@ -124,21 +129,64 @@ router.put('/perfil', authenticateToken, profileUpdateValidation, handleValidati
   }
 });
 
-router.post('/recuperar', authRateLimiter, async (req, res) => {
-  const { email } = req.body;
-  if (!email) {
-    return res.status(400).json({ error: 'Ingrese un correo electrónico.' });
+router.post('/recuperar', authRateLimiter, requestPasswordResetValidation, handleValidationErrors, async (req, res) => {
+  try {
+    const { email } = req.body;
+    const GENERIC_MESSAGE = 'Si el correo está registrado, recibirás un enlace para restablecer tu contraseña.';
+
+    const user = await dbService.getUserByEmail(email);
+    if (!user) {
+      // No revelar si el email existe — misma respuesta genérica
+      return res.json({ success: true, message: GENERIC_MESSAGE });
+    }
+
+    const rawToken = await dbService.createPasswordResetToken(user.id);
+    const resetUrl = `${env.APP_URL}/auth/restablecer?token=${rawToken}`;
+    await sendPasswordResetEmail(user.email, resetUrl);
+
+    return res.json({ success: true, message: GENERIC_MESSAGE });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'No fue posible procesar la solicitud. Intenta de nuevo.' });
   }
-  const user = await dbService.getUserByEmail(email);
-  if (!user) {
-    // Avoid user enumeration
-    return res.json({ success: true, message: 'Si el correo existe, recibirá instrucciones para restablecer su clave.' });
+});
+
+router.post('/restablecer', authRateLimiter, resetPasswordValidation, handleValidationErrors, async (req, res) => {
+  try {
+    const { token, password } = req.body;
+
+    const userId = await dbService.getValidPasswordResetUserId(token);
+    if (!userId) {
+      return res.status(400).json({ error: 'El enlace de recuperación es inválido o expiró. Solicita uno nuevo.' });
+    }
+
+    await dbService.updateUserPassword(userId, hashPassword(password));
+    await dbService.consumePasswordResetToken(token);
+
+    const user = await dbService.getUserById(userId);
+    if (user) {
+      await dbService.clearLoginAttempts(user.email);
+    }
+
+    return res.json({ success: true, message: 'Contraseña actualizada. Ya puedes iniciar sesión.' });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'No fue posible restablecer la contraseña. Intenta de nuevo.' });
   }
-  console.log(`[PASS_RESET] Mock password recovery link sent for ${email}. Reset code: RST-${Date.now()}`);
-  return res.json({
-    success: true,
-    message: 'Correo enviado. (Consulte los logs de la consola o use clave de prueba; este paso se ha simulado exitosamente en este ambiente).',
-  });
+});
+
+router.put('/password', authenticateToken, changePasswordValidation, handleValidationErrors, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    const user = await dbService.getUserByEmail(req.user!.email);
+    if (!user || !comparePassword(currentPassword, user.password_hash)) {
+      return res.status(400).json({ error: 'La contraseña actual no es correcta.' });
+    }
+
+    await dbService.updateUserPassword(user.id, hashPassword(newPassword));
+    return res.json({ success: true, message: 'Contraseña actualizada correctamente.' });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 export default router;

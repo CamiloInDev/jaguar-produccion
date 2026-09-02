@@ -18,6 +18,9 @@ interface AuthState {
   register: (data: { email: string; password: string; nombre: string; apellido: string; telefono?: string }) => Promise<User>;
   logout: () => Promise<void>;
   updateProfile: (data: { nombre: string; apellido: string; telefono?: string }) => Promise<User>;
+  requestPasswordReset: (email: string) => Promise<string>;
+  resetPassword: (token: string, password: string) => Promise<string>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<string>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -80,6 +83,30 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const errMsg = err.response?.data?.error || 'Error al actualizar perfil.';
       set({ error: errMsg, loading: false });
       throw new Error(errMsg);
+    }
+  },
+  requestPasswordReset: async (email) => {
+    try {
+      const res = await api.post('/auth/recuperar', { email });
+      return res.data.message as string;
+    } catch (err: any) {
+      throw new Error(err.response?.data?.error || 'Error al solicitar la recuperación.');
+    }
+  },
+  resetPassword: async (token, password) => {
+    try {
+      const res = await api.post('/auth/restablecer', { token, password });
+      return res.data.message as string;
+    } catch (err: any) {
+      throw new Error(err.response?.data?.error || 'Error al restablecer la contraseña.');
+    }
+  },
+  changePassword: async (currentPassword, newPassword) => {
+    try {
+      const res = await api.put('/auth/password', { currentPassword, newPassword });
+      return res.data.message as string;
+    } catch (err: any) {
+      throw new Error(err.response?.data?.error || 'Error al cambiar la contraseña.');
     }
   }
 }));

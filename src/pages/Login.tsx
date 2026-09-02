@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store';
-import { LogIn, KeyRound, Mail, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { LogIn, KeyRound, Mail, AlertTriangle } from 'lucide-react';
 
 export default function Login() {
   const { login, error, clearError } = useAuthStore();
@@ -39,17 +39,6 @@ export default function Login() {
     }
   };
 
-  const loadPreset = (role: 'cliente' | 'admin') => {
-    clearError();
-    if (role === 'admin') {
-      setEmail('admin@jaguarcoffee.com');
-      setPassword('admin123');
-    } else {
-      setEmail('cliente@jaguarcoffee.com');
-      setPassword('cliente123');
-    }
-  };
-
   return (
     <div id="login-view" className="max-w-md mx-auto my-12 px-4">
       <div className="bg-white border border-stone-200 rounded-3xl p-8 shadow-md space-y-6">
@@ -63,25 +52,6 @@ export default function Login() {
           <p className="text-xs text-stone-500 font-light max-w-xs mx-auto leading-normal">
             Ingresa a tu cuenta para verificar tus pedidos, historiales de cata y sincronizar tu carrito.
           </p>
-        </div>
-
-        {/* Demo login shortcuts */}
-        <div className="p-4 bg-[#FFA42C]/5 border border-[#FFA42C]/20 rounded-2xl text-center space-y-2.5">
-          <h4 className="text-[10px] uppercase font-bold text-[#122C9B] tracking-wider font-mono">Simulador de Acceso Crítico (Sandbox)</h4>
-          <div className="flex justify-center gap-2">
-            <button
-              onClick={() => loadPreset('cliente')}
-              className="px-3 py-1.5 bg-white border border-[#FFA42C]/30 text-[#122C9B] text-[10px] font-bold rounded-lg hover:bg-[#FFA42C]/10 transition cursor-pointer"
-            >
-              Cargar Cliente de Prueba
-            </button>
-            <button
-              onClick={() => loadPreset('admin')}
-              className="px-2.5 py-1.5 bg-[#122C9B] border border-[#122C9B] text-white text-[10px] font-bold rounded-lg hover:bg-[#3D5FC9] transition cursor-pointer"
-            >
-              Cargar Administrador
-            </button>
-          </div>
         </div>
 
         {success ? (
@@ -111,13 +81,12 @@ export default function Login() {
             <div className="space-y-1">
               <div className="flex justify-between items-center">
                 <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Contraseña</label>
-                <button
-                  type="button"
-                  onClick={() => alert('Simulado: Se ha enviado un enlace de recuperación al correo registrado.')}
+                <Link
+                  to="/auth/recuperar"
                   className="text-[10px] font-bold text-amber-800 hover:underline"
                 >
                   ¿Olvidaste tu clave?
-                </button>
+                </Link>
               </div>
               <div className="relative">
                 <input
