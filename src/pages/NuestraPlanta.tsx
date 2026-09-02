@@ -171,7 +171,7 @@ export default function NuestraPlanta() {
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
             <a
-              href="https://wa.me/573204263217?text=Hola%20Jaguar%20Coffee,%20quiero%20conocer%20los%20servicios%20de%20tueste%20de%20la%20planta%20en%20Silvania"
+              href="https://wa.me/573157307016?text=Hola%20Jaguar%20Coffee,%20quiero%20conocer%20los%20servicios%20de%20tueste%20de%20la%20planta%20en%20Silvania"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-8 py-4 bg-[#FFA42C] hover:bg-[#FFA42C]/90 text-[#122C9B] font-bold rounded-2xl text-xs uppercase tracking-widest shadow-lg shadow-[#FFA42C]/30 transition-all"
@@ -307,7 +307,7 @@ export default function NuestraPlanta() {
               </p>
               <div className="flex flex-col sm:flex-row gap-3">
                 <a
-                  href="https://wa.me/573204263217?text=Hola%20Jaguar%20Coffee,%20quiero%20conocer%20los%20servicios%20de%20tueste%20de%20la%20planta%20en%20Silvania"
+                  href="https://wa.me/573157307016?text=Hola%20Jaguar%20Coffee,%20quiero%20conocer%20los%20servicios%20de%20tueste%20de%20la%20planta%20en%20Silvania"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-[#25D366] hover:bg-[#128C7E] text-white font-bold rounded-2xl text-xs uppercase tracking-widest transition-all"

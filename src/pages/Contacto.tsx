@@ -101,12 +101,9 @@ export default function Contacto() {
                 Horarios Casa Jaguar
               </h4>
               <ul className="text-sm text-[#122C9B]/60 font-light space-y-1">
-                <li><span className="font-semibold text-[#122C9B]/80">Lun – Mié:</span> 9:00 a.m. – 7:00 p.m.</li>
-                <li><span className="font-semibold text-[#122C9B]/80">Jue:</span> 9:00 a.m. – 8:00 p.m.</li>
-                <li><span className="font-semibold text-[#122C9B]/80">Vie – Sáb:</span> 8:00 a.m. – 9:00 p.m.</li>
-                <li><span className="font-semibold text-[#122C9B]/80">Domingo normal:</span> 10:00 a.m. – 7:00 p.m.</li>
-                <li><span className="font-semibold text-[#122C9B]/80">Domingo con lunes festivo:</span> 10:00 a.m. – 9:00 p.m.</li>
-                <li><span className="font-semibold text-[#122C9B]/80">Lunes festivo:</span> 10:00 a.m. – 7:00 p.m.</li>
+                <li><span className="font-semibold text-[#122C9B]/80">Lunes – Viernes:</span> 8:00 a.m. – 6:00 p.m.</li>
+                <li><span className="font-semibold text-[#122C9B]/80">Sábados:</span> 9:00 a.m. – 5:00 p.m.</li>
+                <li><span className="font-semibold text-[#122C9B]/80">Domingos:</span> 10:00 a.m. – 3:00 p.m.</li>
               </ul>
             </div>
 
