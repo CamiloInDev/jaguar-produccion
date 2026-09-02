@@ -45,14 +45,46 @@ export interface Experience {
   recomendaciones?: string[];
 }
 
+export interface HaciendaFeature {
+  icono: string;
+  texto: string;
+}
+
 export interface Hacienda {
   id: string;
+  slug: string;
   nombre: string;
+  tipo: string;
   descripcion: string;
+  descripcion_corta: string;
   ubicacion: string;
+  capacidad_max: number;
+  precio_noche: number;
   imagen_url: string;
+  galeria: string[];
+  features: HaciendaFeature[];
   airbnb_url: string;
   booking_url: string;
+  google_maps_url: string;
+  pet_friendly: boolean;
+  orden: number;
+  activo: boolean;
+}
+
+export interface Course {
+  id: string;
+  slug: string;
+  title: string;
+  duration: string;
+  level: string;
+  price: string;
+  priceDetail: string;
+  description: string;
+  syllabus: string[];
+  maxPeople: number;
+  orden: number;
+  activo: boolean;
+  created_at: string;
 }
 
 export interface CartItem {

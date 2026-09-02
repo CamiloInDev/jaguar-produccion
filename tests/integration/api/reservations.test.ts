@@ -14,13 +14,13 @@ const tomorrow = () => {
 beforeAll(async () => {
   const helpers = await import('../../helpers');
   helpers.backupRealDb();
-  helpers.createTestDb();
+  await helpers.createTestDb();
   app = await helpers.createTestApp();
 });
 
 afterAll(async () => {
   const helpers = await import('../../helpers');
-  helpers.restoreRealDb();
+  await helpers.restoreRealDb();
 });
 
 async function getAdminCookies() {

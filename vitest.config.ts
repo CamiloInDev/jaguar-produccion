@@ -10,11 +10,11 @@ export default defineConfig({
   test: {
     globals: false,
     environment: 'node',
-    // NOTA: los tests de integración (tests/integration/**) están pausados tras la
-    // migración a MySQL. Requieren una base de datos MySQL de prueba y una reescritura
-    // del harness (createTestDb → seeding SQL). Ver README-DEPLOY.md § "Tests pendientes".
-    include: ['tests/unit/**/*.test.ts'],
-    exclude: ['node_modules', 'dist', 'e2e', 'tests/integration'],
+    // Los tests de integración corren contra una BD MySQL de prueba (jaguar_test,
+    // ver db/schema.sql). tests/setup.ts fija DB_NAME=jaguar_test antes de cualquier
+    // import de server/config/env.ts para no tocar jaguar_dev.
+    include: ['tests/unit/**/*.test.ts', 'tests/integration/**/*.test.ts'],
+    exclude: ['node_modules', 'dist', 'e2e'],
     setupFiles: ['tests/setup.ts'],
     testTimeout: 30000,
     hookTimeout: 30000,

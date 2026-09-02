@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { dbService } from '../db';
 import { authenticateToken, requireRole } from '../middleware/auth';
 import { productValidation, handleValidationErrors } from '../middleware/validate';
+import { deleteUploadedFile } from '../lib/uploads';
 
 const router = Router();
 
@@ -64,6 +65,7 @@ router.put('/:id', authenticateToken, requireRole('admin', 'editor'), productVal
   try {
     const id = req.params.id;
     const { nombre, descripcion, precio, precio_antes, stock, categoria, origen, tueste, imagen_url, activo } = req.body;
+    const previous = await dbService.getProductById(id);
     await dbService.saveProduct({
       id,
       nombre,
@@ -77,6 +79,9 @@ router.put('/:id', authenticateToken, requireRole('admin', 'editor'), productVal
       imagen_url,
       activo: activo !== undefined ? activo : true,
     });
+    if (previous && previous.imagen_url !== imagen_url) {
+      await deleteUploadedFile(previous.imagen_url);
+    }
     return res.json({ success: true, message: 'Producto actualizado exitosamente.' });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
@@ -85,7 +90,9 @@ router.put('/:id', authenticateToken, requireRole('admin', 'editor'), productVal
 
 router.delete('/:id', authenticateToken, requireRole('admin', 'editor'), async (req, res) => {
   try {
+    const existing = await dbService.getProductById(req.params.id);
     await dbService.deleteProduct(req.params.id);
+    if (existing) await deleteUploadedFile(existing.imagen_url);
     return res.json({ success: true, message: 'Producto eliminado.' });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });

@@ -1,61 +1,41 @@
-import React, { useState } from 'react';
-import { Award, BookOpen, Clock, GraduationCap, Star, BarChart, Users, MessageCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { Award, BookOpen, Clock, GraduationCap, Star, BarChart, Users, MessageCircle, Loader2 } from 'lucide-react';
 import BookingCalendar from '../components/BookingCalendar';
-
-interface Course {
-  id: string;
-  title: string;
-  duration: string;
-  level: string;
-  price: string;
-  priceDetail: string;
-  description: string;
-  syllabus: string[];
-}
+import { Course } from '../types';
 
 export default function Academia() {
-  const [selectedCourse, setSelectedCourse] = useState<string>('course_integral_basico');
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedCourse, setSelectedCourse] = useState<string>('');
 
-  const courses: Course[] = [
-    {
-      id: 'course_integral_basico',
-      title: 'Curso Integral de Barismo Básico',
-      duration: '30 horas',
-      level: 'Principiante',
-      price: '$2.200.000',
-      priceDetail: 'Curso completo · 5 módulos de 6 hrs c/u · Cada módulo $550.000 COP',
-      description: 'Formación completa para iniciarse en el mundo del café de especialidad. Incluye Barista Espresso, Brewing, Tueste básico, Catación y Procesos de producción. Ideal para quienes quieren entender el café desde la semilla hasta la taza.',
-      syllabus: [
-        'Historia del café, origen, especies y variedades.',
-        'Barista Espresso básico: principios de extracción, máquina y molino, organización.',
-        'Barista Brewing básico: métodos de preparación, agua, descriptores, Golden Cup.',
-        'Tueste básico: componentes de la tostadora, control del tueste, cambios físicos, seguridad industrial.',
-        'Catación básica: análisis sensorial, sabores básicos, ácidos orgánicos del café.',
-        'Procesos de producción: procesamiento, clasificación, buenas prácticas.',
-        'Arte latte: texturización de leche y figuras básicas.'
-      ]
-    },
-    {
-      id: 'course_sca_intermedio',
-      title: 'Curso de Certificación SCA Intermedio / Profesional',
-      duration: 'Mínimo 14 horas',
-      level: 'Intermedio a Profesional',
-      price: 'Desde $3.800.000',
-      priceDetail: 'Intermedio $3.800.000 COP · Profesional $4.000.000 COP',
-      description: 'Certificación internacional de la Specialty Coffee Association (SCA) dirigida a baristas, tostadores y catadores con experiencia que buscan perfeccionar su técnica y alcanzar un nivel profesional avalado a nivel mundial.',
-      syllabus: [
-        'Inscripción a la Specialty Coffee Association (SCA).',
-        'Examen teórico y práctico avalado por la SCA.',
-        'Materiales de estudio especializados y materia prima para prácticas.',
-        'Certificación oficial emitida por la SCA.',
-        'Barista Skills Intermedio/Profesional: control del espresso, análisis sensorial, arte latte y flujo de trabajo.',
-        'Brewing Intermedio/Profesional: variables de extracción, uso de refractómetro, Brewing Control Chart y métodos de filtrado.',
-        'Café Verde Intermedio/Profesional: botánica, procesos, mercados, contratos, almacenamiento y clasificación.',
-        'Tueste Intermedio/Profesional: perfiles de tueste, termodinámica, transferencia de calor y tueste de muestras.',
-        'Sensory Skills Intermedio/Profesional: fisiología del gusto, pruebas triangulares, SCA Flavor Wheel y paneles sensoriales.'
-      ]
-    }
-  ];
+  useEffect(() => {
+    axios.get('/api/cursos')
+      .then(res => setCourses(Array.isArray(res.data) ? res.data : []))
+      .catch(err => console.error('Error cargando cursos', err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (courses.length && !selectedCourse) setSelectedCourse(courses[0].id);
+  }, [courses, selectedCourse]);
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-24 text-center">
+        <Loader2 className="w-8 h-8 text-[#FFA42C] animate-spin mx-auto" />
+      </div>
+    );
+  }
+
+  if (courses.length === 0) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-24 text-center space-y-2">
+        <BookOpen className="w-10 h-10 text-[#122C9B]/30 mx-auto" />
+        <p className="text-sm text-[#122C9B]/60">No hay cursos disponibles por el momento.</p>
+      </div>
+    );
+  }
 
   const selected = courses.find(c => c.id === selectedCourse) || courses[0];
 
@@ -240,17 +220,17 @@ export default function Academia() {
             </span>
             <span className="flex items-center gap-1.5">
               <Users className="w-3.5 h-3.5 text-[#FFA42C]" />
-              Máx 10 participantes
+              Máx {selected.maxPeople} participantes
             </span>
           </div>
         </div>
 
         <BookingCalendar
           tipo="academia"
-          itemId={selectedCourse}
+          itemId={selected.id}
           itemNombre={selected.title}
-          itemSlug={selectedCourse}
-          maxPeople={10}
+          itemSlug={selected.slug}
+          maxPeople={selected.maxPeople}
         />
       </div>
 

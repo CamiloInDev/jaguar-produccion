@@ -15,6 +15,7 @@ const envSchema = z.object({
 
   // Wompi payment gateway
   WOMPI_INTEGRITY_KEY: z.string().min(1, 'WOMPI_INTEGRITY_KEY is required'),
+  WOMPI_EVENTS_KEY: z.string().min(1, 'WOMPI_EVENTS_KEY is required'),
   VITE_WOMPI_PUBLIC_KEY: z.string().min(1, 'VITE_WOMPI_PUBLIC_KEY is required'),
 
   // Application
@@ -32,9 +33,27 @@ const envSchema = z.object({
   ADMIN_PASSWORD: z.string().min(8).optional(),
   ADMIN_NOMBRE: z.string().optional(),
   ADMIN_APELLIDO: z.string().optional(),
+
+  // SMTP (envío de correos: recuperación de contraseña, etc.)
+  // Obligatorias en producción; opcionales en dev/test (ver superRefine abajo).
+  SMTP_HOST: z.string().min(1).optional(),
+  SMTP_PORT: z.coerce.number().optional(),
+  SMTP_USER: z.string().min(1).optional(),
+  SMTP_PASSWORD: z.string().min(1).optional(),
+  SMTP_FROM: z.string().min(1).optional(),
 });
 
-const parsed = envSchema.safeParse(process.env);
+const envSchemaWithRules = envSchema.superRefine((data, ctx) => {
+  if (data.NODE_ENV === 'production') {
+    (['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_FROM'] as const).forEach((key) => {
+      if (data[key] == null || data[key] === '') {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: [key], message: `${key} is required in production` });
+      }
+    });
+  }
+});
+
+const parsed = envSchemaWithRules.safeParse(process.env);
 
 if (!parsed.success) {
   console.error('[ENV ERROR] Invalid or missing environment variables:');
@@ -45,4 +64,4 @@ if (!parsed.success) {
   process.exit(1);
 }
 
-export const env = parsed.data;
+export const env = parsed.data as z.infer<typeof envSchema>;

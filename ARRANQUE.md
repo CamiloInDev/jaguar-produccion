@@ -94,5 +94,5 @@ curl http://localhost:3000/api/productos    # -> 26 productos (JSON)
 ## Notas
 
 - El `.env` **nunca** se sube al repo.
-- El runtime con MySQL **aún no se ha verificado**; este primer arranque es la prueba de fuego.
-- Pendientes del proyecto: ver **[README-DEPLOY.md](README-DEPLOY.md) §10** (Wompi real, tests de integración, panel de usuarios, backups).
+- Runtime con MySQL **verificado**: build de producción (`npm run build`) + seed + `node dist/server.cjs` probado contra una BD MySQL real (health check, catálogo, login y creación de orden respondiendo correctamente).
+- Pendientes del proyecto: ver **[README-DEPLOY.md](README-DEPLOY.md) §12** (Wompi producción, panel de usuarios, backups).

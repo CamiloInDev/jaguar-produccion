@@ -1,60 +1,27 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, Clock, Users, ChevronRight, Award, MessageCircle } from 'lucide-react';
+import axios from 'axios';
+import { Clock, Users, ChevronRight, MessageCircle, Loader2 } from 'lucide-react';
+import { Experience } from '../types';
 
 export default function Experiencias() {
-  const experiences = [
-    {
-      id: 1,
-      nombre: 'Cata de Cafés de Especialidad',
-      descripcion: 'Descubre los matices y perfiles sensoriales de los mejores cafés colombianos en una sesión guiada por nuestros baristas.',
-      duracion_min: 45,
-      capacidad_max: 10,
-      precio: 90000,
-      imagen_url: 'https://cafejaguar.com/wp-content/uploads/2026/01/Experiencia-de-cataciones-684x1024.webp',
-      slug: 'catacion'
-    },
-    {
-      id: 2,
-      nombre: 'Métodos de Preparación',
-      descripcion: 'Convierte la preparación del café en un verdadero ritual con métodos como Prensa Francesa, Aeropress y V60.',
-      duracion_min: 45,
-      capacidad_max: 10,
-      precio: 90000,
-      imagen_url: 'https://cafejaguar.com/wp-content/uploads/2026/01/Experiencia-de-filtrados-685x1024.webp',
-      slug: 'metodos-de-preparacion'
-    },
-    {
-      id: 3,
-      nombre: 'Experiencia de Tueste',
-      descripcion: 'Conecta con el corazón del café y conoce el proceso de transformación del grano verde al café tostado.',
-      duracion_min: 45,
-      capacidad_max: 10,
-      precio: 115000,
-      imagen_url: 'https://cafejaguar.com/wp-content/uploads/2026/01/Experiencia-de-tueste-685x1024.webp',
-      slug: 'tueste'
-    },
-    {
-      id: 4,
-      nombre: 'Experiencia Completa Jaguar Coffee',
-      descripcion: 'La experiencia definitiva para los amantes del café: incluye Cata, Métodos de Preparación y Tueste.',
-      duracion_min: 180,
-      capacidad_max: 10,
-      precio: 200000,
-      imagen_url: 'https://cafejaguar.com/wp-content/uploads/2026/01/Experiencia-de-cataciones-684x1024.webp',
-      slug: 'experiencia-completa'
-    },
-    {
-      id: 5,
-      nombre: 'Scooter Tour — Centro Histórico de Bogotá',
-      descripcion: 'Recorrido guiado en patineta eléctrica por el Centro Histórico de Bogotá, con guía profesional y equipo de seguridad.',
-      duracion_min: 120,
-      capacidad_max: 7,
-      precio: 65000,
-      imagen_url: 'https://cafejaguar.com/wp-content/uploads/2026/01/tour-historico-en-scooter-685x1024.webp',
-      slug: 'scooter-tour'
-    }
-  ];
+  const [experiences, setExperiences] = useState<Experience[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    axios.get('/api/experiencias')
+      .then(res => setExperiences(Array.isArray(res.data) ? res.data.filter((e: Experience) => e.activo) : []))
+      .catch(err => console.error('Error cargando experiencias', err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-24 text-center">
+        <Loader2 className="w-8 h-8 text-[#FFA42C] animate-spin mx-auto" />
+      </div>
+    );
+  }
 
   return (
     <div id="experiences-view" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-12">
@@ -71,6 +38,9 @@ export default function Experiencias() {
         </p>
       </div>
 
+      {experiences.length === 0 ? (
+        <p className="text-center text-sm text-[#122C9B]/60">No hay experiencias disponibles por el momento.</p>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {experiences.map((exp) => (
           <Link
@@ -119,6 +89,7 @@ export default function Experiencias() {
           </Link>
         ))}
       </div>
+      )}
 
       <div className="p-6 bg-[#122C9B]/5 border border-[#122C9B]/10 rounded-2xl max-w-4xl mx-auto flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
         <span className="p-3 bg-white text-[#122C9B] border border-[#122C9B]/10 rounded-xl inline-block shadow-sm">

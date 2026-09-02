@@ -3,8 +3,8 @@ import bcrypt from 'bcryptjs';
 import type { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { pool } from './config/db-pool';
 import {
-  Product, Experience, Hacienda, User, Order, ContactMessage,
-  OrderStatus, OrderItem, CarouselSlide, Reservation, ReservationStatus
+  Product, Experience, Hacienda, HaciendaFeature, User, Order, ContactMessage,
+  OrderStatus, OrderItem, CarouselSlide, Reservation, ReservationStatus, Course
 } from '../src/types';
 
 // -----------------------------------------------------------------------------
@@ -85,12 +85,41 @@ function rowToExperience(r: RowDataPacket): Experience {
 function rowToHacienda(r: RowDataPacket): Hacienda {
   return {
     id: r.id,
+    slug: r.slug,
     nombre: r.nombre,
+    tipo: r.tipo,
     descripcion: r.descripcion,
+    descripcion_corta: r.descripcion_corta,
     ubicacion: r.ubicacion,
+    capacidad_max: Number(r.capacidad_max),
+    precio_noche: Number(r.precio_noche),
     imagen_url: r.imagen_url,
+    galeria: parseJson<string[]>(r.galeria, []),
+    features: parseJson<HaciendaFeature[]>(r.features, []),
     airbnb_url: r.airbnb_url,
     booking_url: r.booking_url,
+    google_maps_url: r.google_maps_url ?? '',
+    pet_friendly: toBool(r.pet_friendly),
+    orden: Number(r.orden),
+    activo: toBool(r.activo),
+  };
+}
+
+function rowToCourse(r: RowDataPacket): Course {
+  return {
+    id: r.id,
+    slug: r.slug,
+    title: r.title,
+    duration: r.duration,
+    level: r.level,
+    price: r.price,
+    priceDetail: r.priceDetail,
+    description: r.description,
+    syllabus: parseJson<string[]>(r.syllabus, []),
+    maxPeople: Number(r.maxPeople),
+    orden: Number(r.orden),
+    activo: toBool(r.activo),
+    created_at: r.created_at,
   };
 }
 
@@ -316,6 +345,11 @@ export const dbService = {
     return rows.length ? rowToExperience(rows[0]) : null;
   },
 
+  async getExperienceById(id: string): Promise<Experience | null> {
+    const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM experiences WHERE id = ? LIMIT 1', [id]);
+    return rows.length ? rowToExperience(rows[0]) : null;
+  },
+
   async saveExperience(exp: Omit<Experience, 'id' | 'slug'> & { id?: string }): Promise<void> {
     const slug = slugify(exp.nombre);
     const imagenes = JSON.stringify(exp.imagenes || []);
@@ -350,8 +384,118 @@ export const dbService = {
   // Haciendas
   // --------------------------------------------------------------------------
   async getHaciendas(): Promise<Hacienda[]> {
-    const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM haciendas');
+    const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM haciendas WHERE activo = 1 ORDER BY orden ASC');
     return rows.map(rowToHacienda);
+  },
+
+  async getAllHaciendas(): Promise<Hacienda[]> {
+    const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM haciendas ORDER BY orden ASC');
+    return rows.map(rowToHacienda);
+  },
+
+  async getHaciendaBySlug(slug: string): Promise<Hacienda | null> {
+    const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM haciendas WHERE slug = ? LIMIT 1', [slug]);
+    return rows.length ? rowToHacienda(rows[0]) : null;
+  },
+
+  async getHaciendaById(id: string): Promise<Hacienda | null> {
+    const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM haciendas WHERE id = ? LIMIT 1', [id]);
+    return rows.length ? rowToHacienda(rows[0]) : null;
+  },
+
+  async saveHacienda(h: Omit<Hacienda, 'id' | 'slug'> & { id?: string; slug?: string }): Promise<void> {
+    const slug = h.slug || slugify(h.nombre);
+    const galeria = JSON.stringify(h.galeria || []);
+    const features = JSON.stringify(h.features || []);
+    if (h.id) {
+      await pool.query(
+        `UPDATE haciendas SET slug = ?, nombre = ?, tipo = ?, descripcion = ?, descripcion_corta = ?,
+         ubicacion = ?, capacidad_max = ?, precio_noche = ?, imagen_url = ?, galeria = ?, features = ?,
+         airbnb_url = ?, booking_url = ?, google_maps_url = ?, pet_friendly = ?, orden = ?, activo = ?
+         WHERE id = ?`,
+        [slug, h.nombre, h.tipo, h.descripcion, h.descripcion_corta || '', h.ubicacion,
+         h.capacidad_max, h.precio_noche, h.imagen_url, galeria, features,
+         h.airbnb_url || '', h.booking_url || '', h.google_maps_url || null,
+         h.pet_friendly ? 1 : 0, h.orden ?? 1, h.activo !== undefined ? (h.activo ? 1 : 0) : 1, h.id]
+      );
+    } else {
+      await pool.query('INSERT INTO haciendas SET ?', [{
+        id: 'hac_' + crypto.randomUUID(),
+        slug,
+        nombre: h.nombre,
+        tipo: h.tipo,
+        descripcion: h.descripcion,
+        descripcion_corta: h.descripcion_corta || '',
+        ubicacion: h.ubicacion,
+        capacidad_max: h.capacidad_max,
+        precio_noche: h.precio_noche,
+        imagen_url: h.imagen_url,
+        galeria,
+        features,
+        airbnb_url: h.airbnb_url || '',
+        booking_url: h.booking_url || '',
+        google_maps_url: h.google_maps_url || null,
+        pet_friendly: h.pet_friendly ? 1 : 0,
+        orden: h.orden ?? 1,
+        activo: h.activo !== undefined ? (h.activo ? 1 : 0) : 1,
+      }]);
+    }
+  },
+
+  async deleteHacienda(id: string): Promise<void> {
+    await pool.query('DELETE FROM haciendas WHERE id = ?', [id]);
+  },
+
+  // --------------------------------------------------------------------------
+  // Cursos (Academia)
+  // --------------------------------------------------------------------------
+  async getCourses(): Promise<Course[]> {
+    const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM courses WHERE activo = 1 ORDER BY orden ASC');
+    return rows.map(rowToCourse);
+  },
+
+  async getAllCourses(): Promise<Course[]> {
+    const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM courses ORDER BY orden ASC');
+    return rows.map(rowToCourse);
+  },
+
+  async getCourseBySlug(slug: string): Promise<Course | null> {
+    const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM courses WHERE slug = ? LIMIT 1', [slug]);
+    return rows.length ? rowToCourse(rows[0]) : null;
+  },
+
+  async saveCourse(course: Omit<Course, 'id' | 'slug' | 'created_at'> & { id?: string; slug?: string }): Promise<void> {
+    const slug = course.slug || slugify(course.title);
+    const syllabus = JSON.stringify(course.syllabus || []);
+    if (course.id) {
+      await pool.query(
+        `UPDATE courses SET slug = ?, title = ?, duration = ?, level = ?, price = ?, priceDetail = ?,
+         description = ?, syllabus = ?, maxPeople = ?, orden = ?, activo = ? WHERE id = ?`,
+        [slug, course.title, course.duration, course.level, course.price, course.priceDetail || '',
+         course.description, syllabus, course.maxPeople ?? 10, course.orden ?? 1,
+         course.activo !== undefined ? (course.activo ? 1 : 0) : 1, course.id]
+      );
+    } else {
+      await pool.query('INSERT INTO courses SET ?', [{
+        id: 'course_' + crypto.randomUUID(),
+        slug,
+        title: course.title,
+        duration: course.duration,
+        level: course.level,
+        price: course.price,
+        priceDetail: course.priceDetail || '',
+        description: course.description,
+        syllabus,
+        maxPeople: course.maxPeople ?? 10,
+        orden: course.orden ?? 1,
+        activo: course.activo !== undefined ? (course.activo ? 1 : 0) : 1,
+        created_at: new Date().toISOString(),
+      }]);
+    }
+  },
+
+  async deleteCourse(id: string): Promise<void> {
+    await pool.query('DELETE FROM courses WHERE id = ?', [id]);
   },
 
   // --------------------------------------------------------------------------
@@ -583,6 +727,46 @@ export const dbService = {
 
   async clearLoginAttempts(email: string): Promise<void> {
     await pool.query('DELETE FROM login_attempts WHERE email = ?', [email.toLowerCase()]);
+  },
+
+  // --------------------------------------------------------------------------
+  // Password reset tokens
+  // --------------------------------------------------------------------------
+  PASSWORD_RESET_TTL_MS: 60 * 60 * 1000, // 1 hora
+
+  /** Genera un token de un solo uso; solo su hash SHA-256 queda en la BD. */
+  async createPasswordResetToken(userId: string): Promise<string> {
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const now = Date.now();
+    await pool.query(
+      'INSERT INTO password_resets (token_hash, user_id, expires_at, used, created_at) VALUES (?, ?, ?, 0, ?)',
+      [tokenHash, userId, String(now + this.PASSWORD_RESET_TTL_MS), new Date(now).toISOString()]
+    );
+    return rawToken;
+  },
+
+  /** Devuelve el user_id si el token es válido (existe, no usado, no expirado). */
+  async getValidPasswordResetUserId(rawToken: string): Promise<string | null> {
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const [rows] = await pool.query<RowDataPacket[]>(
+      'SELECT user_id, expires_at, used FROM password_resets WHERE token_hash = ? LIMIT 1',
+      [tokenHash]
+    );
+    if (rows.length === 0) return null;
+    const row = rows[0];
+    if (row.used) return null;
+    if (Number(row.expires_at) < Date.now()) return null;
+    return row.user_id;
+  },
+
+  async consumePasswordResetToken(rawToken: string): Promise<void> {
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    await pool.query('UPDATE password_resets SET used = 1 WHERE token_hash = ?', [tokenHash]);
+  },
+
+  async updateUserPassword(userId: string, passwordHash: string): Promise<void> {
+    await pool.query('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, userId]);
   },
 
   // --------------------------------------------------------------------------

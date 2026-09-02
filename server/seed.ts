@@ -100,15 +100,45 @@ async function seedCatalog(): Promise<void> {
   for (const h of data.haciendas || []) {
     await upsert('haciendas', {
       id: h.id,
+      slug: h.slug,
       nombre: h.nombre,
+      tipo: h.tipo,
       descripcion: h.descripcion,
+      descripcion_corta: h.descripcion_corta || '',
       ubicacion: h.ubicacion,
+      capacidad_max: h.capacidad_max ?? 8,
+      precio_noche: h.precio_noche ?? 0,
       imagen_url: h.imagen_url,
-      airbnb_url: h.airbnb_url,
-      booking_url: h.booking_url,
+      galeria: JSON.stringify(h.galeria || []),
+      features: JSON.stringify(h.features || []),
+      airbnb_url: h.airbnb_url || '',
+      booking_url: h.booking_url || '',
+      google_maps_url: h.google_maps_url || null,
+      pet_friendly: h.pet_friendly ? 1 : 0,
+      orden: h.orden ?? 1,
+      activo: h.activo !== false ? 1 : 0,
     });
   }
   console.log(`[SEED] Haciendas: ${(data.haciendas || []).length}`);
+
+  for (const c of data.courses || []) {
+    await upsert('courses', {
+      id: c.id,
+      slug: c.slug,
+      title: c.title,
+      duration: c.duration,
+      level: c.level,
+      price: c.price,
+      priceDetail: c.priceDetail || '',
+      description: c.description,
+      syllabus: JSON.stringify(c.syllabus || []),
+      maxPeople: c.maxPeople ?? 10,
+      orden: c.orden ?? 1,
+      activo: c.activo !== false ? 1 : 0,
+      created_at: c.created_at || new Date().toISOString(),
+    });
+  }
+  console.log(`[SEED] Cursos: ${(data.courses || []).length}`);
 
   for (const s of data.slides || []) {
     await upsert('slides', {

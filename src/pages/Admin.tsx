@@ -1,8 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuthStore } from '../store';
 import { useNavigate } from 'react-router-dom';
-import { ShieldCheck, Plus, Trash2, Edit2, ShoppingBag, Landmark, MessageSquare, ClipboardList, PenTool, CheckCircle, RefreshCw, Calendar } from 'lucide-react';
-import { Product, Order, Experience, ContactMessage, CoffeeCategory, OrderStatus, CarouselSlide, Reservation } from '../types';
+import {
+  ShieldCheck, Plus, Trash2, Edit2, ShoppingBag, Landmark, MessageSquare, ClipboardList, PenTool,
+  CheckCircle, RefreshCw, Calendar, GraduationCap, Tent, Coffee, Upload
+} from 'lucide-react';
+import { Product, Order, Experience, ContactMessage, CoffeeCategory, OrderStatus, CarouselSlide, Reservation, Course, Hacienda, HaciendaFeature, User, UserRole } from '../types';
+import ImageUploadField from '../components/ImageUploadField';
+import { uploadImage } from '../lib/upload';
+
+const HACIENDA_ICONS = ['Sunrise', 'Moon', 'Coffee', 'TreePine', 'Car', 'Wifi', 'PawPrint', 'Users', 'MapPin'] as const;
 import axios from 'axios';
 
 export default function Admin() {
@@ -14,7 +21,7 @@ export default function Admin() {
   const [messages, setMessages] = useState<ContactMessage[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
 
-  const [activeSegment, setActiveSegment] = useState<'productos' | 'ordenes' | 'mensajes' | 'slides' | 'reservas'>('productos');
+  const [activeSegment, setActiveSegment] = useState<'productos' | 'ordenes' | 'mensajes' | 'slides' | 'reservas' | 'cursos' | 'estadias' | 'experiencias' | 'usuarios'>('productos');
   const [slides, setSlides] = useState<CarouselSlide[]>([]);
   const [isEditingSlide, setIsEditingSlide] = useState(false);
   const [editingSlideId, setEditingSlideId] = useState<string | null>(null);
@@ -30,6 +37,67 @@ export default function Admin() {
     orden: 1,
     activo: true
   });
+
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [isEditingCourse, setIsEditingCourse] = useState(false);
+  const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
+  const [courseForm, setCourseForm] = useState({
+    title: '',
+    duration: '',
+    level: '',
+    price: '',
+    priceDetail: '',
+    description: '',
+    syllabus: '',
+    maxPeople: 10,
+    orden: 1,
+    activo: true
+  });
+
+  const [haciendas, setHaciendas] = useState<Hacienda[]>([]);
+  const [isEditingHacienda, setIsEditingHacienda] = useState(false);
+  const [editingHaciendaId, setEditingHaciendaId] = useState<string | null>(null);
+  const [haciendaForm, setHaciendaForm] = useState({
+    nombre: '',
+    tipo: 'Glamping',
+    descripcion: '',
+    descripcion_corta: '',
+    ubicacion: '',
+    capacidad_max: 8,
+    precio_noche: '',
+    imagen_url: '',
+    galeria: '',
+    features: [] as HaciendaFeature[],
+    airbnb_url: '',
+    booking_url: '',
+    google_maps_url: '',
+    pet_friendly: false,
+    orden: 1,
+    activo: true
+  });
+  const haciendaGalleryFileRef = useRef<HTMLInputElement>(null);
+  const [uploadingGallery, setUploadingGallery] = useState(false);
+
+  const [experiences, setExperiences] = useState<Experience[]>([]);
+  const [isEditingExperience, setIsEditingExperience] = useState(false);
+  const [editingExperienceId, setEditingExperienceId] = useState<string | null>(null);
+  const [experienceForm, setExperienceForm] = useState({
+    nombre: '',
+    descripcion: '',
+    duracion_min: 60,
+    precio: '',
+    capacidad_max: 10,
+    imagen_url: '',
+    imagenes: '',
+    detalles_incluidos: '',
+    recomendaciones: '',
+    booking_widget: '',
+    activo: true
+  });
+  const experienceGalleryFileRef = useRef<HTMLInputElement>(null);
+
+  const [users, setUsers] = useState<User[]>([]);
+
   const [loading, setLoading] = useState(true);
 
   if (authLoading) {
@@ -59,18 +127,26 @@ export default function Admin() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [pRes, oRes, mRes, sRes, rRes] = await Promise.allSettled([
+      const [pRes, oRes, mRes, sRes, rRes, cRes, hRes, eRes, uRes] = await Promise.allSettled([
         axios.get('/api/productos'),
         axios.get('/api/ordenes-todas'),
         axios.get('/api/contacto'),
         axios.get('/api/slides/all'),
-        axios.get('/api/reservas')
+        axios.get('/api/reservas'),
+        axios.get('/api/cursos/all'),
+        axios.get('/api/haciendas/all'),
+        axios.get('/api/experiencias'),
+        axios.get('/api/usuarios')
       ]);
       if (pRes.status === 'fulfilled' && Array.isArray(pRes.value.data)) setProducts(pRes.value.data);
       if (oRes.status === 'fulfilled' && Array.isArray(oRes.value.data)) setOrders(oRes.value.data);
       if (mRes.status === 'fulfilled' && Array.isArray(mRes.value.data)) setMessages(mRes.value.data);
       if (sRes.status === 'fulfilled' && Array.isArray(sRes.value.data)) setSlides(sRes.value.data);
       if (rRes.status === 'fulfilled' && Array.isArray(rRes.value.data)) setReservations(rRes.value.data);
+      if (cRes.status === 'fulfilled' && Array.isArray(cRes.value.data)) setCourses(cRes.value.data);
+      if (hRes.status === 'fulfilled' && Array.isArray(hRes.value.data)) setHaciendas(hRes.value.data);
+      if (eRes.status === 'fulfilled' && Array.isArray(eRes.value.data)) setExperiences(eRes.value.data);
+      if (uRes.status === 'fulfilled' && Array.isArray(uRes.value.data)) setUsers(uRes.value.data);
     } catch (err) {
       console.error('Error fetching admin data', err);
     } finally {
@@ -217,6 +293,282 @@ export default function Admin() {
     }
   };
 
+  const handleCreateCourseClick = () => {
+    setIsEditingCourse(true);
+    setEditingCourseId(null);
+    setCourseForm({
+      title: '',
+      duration: '',
+      level: '',
+      price: '',
+      priceDetail: '',
+      description: '',
+      syllabus: '',
+      maxPeople: 10,
+      orden: courses.length + 1,
+      activo: true
+    });
+  };
+
+  const handleEditCourseClick = (c: Course) => {
+    setIsEditingCourse(true);
+    setEditingCourseId(c.id);
+    setCourseForm({
+      title: c.title,
+      duration: c.duration,
+      level: c.level,
+      price: c.price,
+      priceDetail: c.priceDetail,
+      description: c.description,
+      syllabus: (c.syllabus || []).join('\n'),
+      maxPeople: c.maxPeople,
+      orden: c.orden,
+      activo: c.activo
+    });
+  };
+
+  const handleSaveCourseSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        ...courseForm,
+        syllabus: courseForm.syllabus.split('\n').map(s => s.trim()).filter(Boolean),
+        maxPeople: Number(courseForm.maxPeople),
+      };
+
+      if (editingCourseId) {
+        await axios.put(`/api/cursos/${editingCourseId}`, payload);
+      } else {
+        await axios.post('/api/cursos', payload);
+      }
+      setIsEditingCourse(false);
+      loadData();
+    } catch (err: any) {
+      alert('Error guardando curso: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
+  const handleDeleteCourse = async (id: string) => {
+    if (!confirm('¿Desea eliminar este curso de la Academia?')) return;
+    try {
+      await axios.delete(`/api/cursos/${id}`);
+      loadData();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleCreateHaciendaClick = () => {
+    setIsEditingHacienda(true);
+    setEditingHaciendaId(null);
+    setHaciendaForm({
+      nombre: '',
+      tipo: 'Glamping',
+      descripcion: '',
+      descripcion_corta: '',
+      ubicacion: '',
+      capacidad_max: 8,
+      precio_noche: '',
+      imagen_url: '',
+      galeria: '',
+      features: [],
+      airbnb_url: '',
+      booking_url: '',
+      google_maps_url: '',
+      pet_friendly: false,
+      orden: haciendas.length + 1,
+      activo: true
+    });
+  };
+
+  const handleEditHaciendaClick = (h: Hacienda) => {
+    setIsEditingHacienda(true);
+    setEditingHaciendaId(h.id);
+    setHaciendaForm({
+      nombre: h.nombre,
+      tipo: h.tipo,
+      descripcion: h.descripcion,
+      descripcion_corta: h.descripcion_corta,
+      ubicacion: h.ubicacion,
+      capacidad_max: h.capacidad_max,
+      precio_noche: h.precio_noche.toString(),
+      imagen_url: h.imagen_url,
+      galeria: (h.galeria || []).join('\n'),
+      features: h.features || [],
+      airbnb_url: h.airbnb_url,
+      booking_url: h.booking_url,
+      google_maps_url: h.google_maps_url,
+      pet_friendly: h.pet_friendly,
+      orden: h.orden,
+      activo: h.activo
+    });
+  };
+
+  const handleSaveHaciendaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        ...haciendaForm,
+        capacidad_max: Number(haciendaForm.capacidad_max),
+        precio_noche: Number(haciendaForm.precio_noche),
+        galeria: haciendaForm.galeria.split('\n').map(s => s.trim()).filter(Boolean),
+      };
+
+      if (editingHaciendaId) {
+        await axios.put(`/api/haciendas/${editingHaciendaId}`, payload);
+      } else {
+        await axios.post('/api/haciendas', payload);
+      }
+      setIsEditingHacienda(false);
+      loadData();
+    } catch (err: any) {
+      alert('Error guardando estadía: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
+  const handleDeleteHacienda = async (id: string) => {
+    if (!confirm('¿Desea eliminar esta estadía?')) return;
+    try {
+      await axios.delete(`/api/haciendas/${id}`);
+      loadData();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleAddHaciendaFeature = () => {
+    setHaciendaForm({ ...haciendaForm, features: [...haciendaForm.features, { icono: HACIENDA_ICONS[0], texto: '' }] });
+  };
+
+  const handleUpdateHaciendaFeature = (idx: number, updates: Partial<HaciendaFeature>) => {
+    setHaciendaForm({
+      ...haciendaForm,
+      features: haciendaForm.features.map((f, i) => i === idx ? { ...f, ...updates } : f)
+    });
+  };
+
+  const handleRemoveHaciendaFeature = (idx: number) => {
+    setHaciendaForm({ ...haciendaForm, features: haciendaForm.features.filter((_, i) => i !== idx) });
+  };
+
+  const handleHaciendaGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingGallery(true);
+    try {
+      const url = await uploadImage(file);
+      setHaciendaForm(prev => ({ ...prev, galeria: prev.galeria ? prev.galeria + '\n' + url : url }));
+    } catch (err: any) {
+      alert('Error subiendo imagen: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setUploadingGallery(false);
+      if (haciendaGalleryFileRef.current) haciendaGalleryFileRef.current.value = '';
+    }
+  };
+
+  const handleCreateExperienceClick = () => {
+    setIsEditingExperience(true);
+    setEditingExperienceId(null);
+    setExperienceForm({
+      nombre: '',
+      descripcion: '',
+      duracion_min: 60,
+      precio: '',
+      capacidad_max: 10,
+      imagen_url: '',
+      imagenes: '',
+      detalles_incluidos: '',
+      recomendaciones: '',
+      booking_widget: '',
+      activo: true
+    });
+  };
+
+  const handleEditExperienceClick = (exp: Experience) => {
+    setIsEditingExperience(true);
+    setEditingExperienceId(exp.id);
+    setExperienceForm({
+      nombre: exp.nombre,
+      descripcion: exp.descripcion,
+      duracion_min: exp.duracion_min,
+      precio: exp.precio.toString(),
+      capacidad_max: exp.capacidad_max,
+      imagen_url: exp.imagen_url,
+      imagenes: (exp.imagenes || []).join('\n'),
+      detalles_incluidos: (exp.detalles_incluidos || []).join('\n'),
+      recomendaciones: (exp.recomendaciones || []).join('\n'),
+      booking_widget: exp.booking_widget || '',
+      activo: exp.activo
+    });
+  };
+
+  const handleSaveExperienceSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        ...experienceForm,
+        precio: Number(experienceForm.precio),
+        imagenes: experienceForm.imagenes.split('\n').map(s => s.trim()).filter(Boolean),
+        detalles_incluidos: experienceForm.detalles_incluidos.split('\n').map(s => s.trim()).filter(Boolean),
+        recomendaciones: experienceForm.recomendaciones.split('\n').map(s => s.trim()).filter(Boolean),
+      };
+
+      if (editingExperienceId) {
+        await axios.put(`/api/experiencias/${editingExperienceId}`, payload);
+      } else {
+        await axios.post('/api/experiencias', payload);
+      }
+      setIsEditingExperience(false);
+      loadData();
+    } catch (err: any) {
+      alert('Error guardando experiencia: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
+  const handleDeleteExperience = async (id: string) => {
+    if (!confirm('¿Desea eliminar esta experiencia?')) return;
+    try {
+      await axios.delete(`/api/experiencias/${id}`);
+      loadData();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleExperienceGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingGallery(true);
+    try {
+      const url = await uploadImage(file);
+      setExperienceForm(prev => ({ ...prev, imagenes: prev.imagenes ? prev.imagenes + '\n' + url : url }));
+    } catch (err: any) {
+      alert('Error subiendo imagen: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setUploadingGallery(false);
+      if (experienceGalleryFileRef.current) experienceGalleryFileRef.current.value = '';
+    }
+  };
+
+  const handleChangeUserRole = async (userId: string, rol: UserRole) => {
+    try {
+      await axios.put(`/api/usuarios/${userId}/rol`, { rol });
+      loadData();
+    } catch (err: any) {
+      alert('Error cambiando rol: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    if (!confirm('¿Desea eliminar este usuario? Esta acción no se puede deshacer.')) return;
+    try {
+      await axios.delete(`/api/usuarios/${userId}`);
+      loadData();
+    } catch (err: any) {
+      alert('Error eliminando usuario: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
   const handleUpdateOrderStatus = async (orderId: string, status: OrderStatus) => {
     try {
       await axios.put(`/api/ordenes/${orderId}/estado`, { estado: status });
@@ -316,7 +668,7 @@ export default function Admin() {
       {/* Row tab selectors admin */}
       <div className="flex border-b border-stone-200 gap-6">
         <button
-          onClick={() => { setActiveSegment('productos'); setIsEditingProduct(false); setIsEditingSlide(false); }}
+          onClick={() => { setActiveSegment('productos'); setIsEditingProduct(false); setIsEditingSlide(false); setIsEditingCourse(false); setIsEditingHacienda(false); setIsEditingExperience(false); }}
           className={`pb-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
             activeSegment === 'productos' ? 'border-[#122C9B] text-[#122C9B] font-black' : 'border-transparent text-stone-500 hover:text-[#122C9B]'
           }`}
@@ -324,7 +676,7 @@ export default function Admin() {
           Cafés (CRUD)
         </button>
         <button
-          onClick={() => { setActiveSegment('ordenes'); setIsEditingProduct(false); setIsEditingSlide(false); }}
+          onClick={() => { setActiveSegment('ordenes'); setIsEditingProduct(false); setIsEditingSlide(false); setIsEditingCourse(false); setIsEditingHacienda(false); setIsEditingExperience(false); }}
           className={`pb-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
             activeSegment === 'ordenes' ? 'border-[#122C9B] text-[#122C9B] font-black' : 'border-transparent text-stone-500 hover:text-[#122C9B]'
           }`}
@@ -332,7 +684,7 @@ export default function Admin() {
           Despachar Pedidos
         </button>
         <button
-          onClick={() => { setActiveSegment('mensajes'); setIsEditingProduct(false); setIsEditingSlide(false); }}
+          onClick={() => { setActiveSegment('mensajes'); setIsEditingProduct(false); setIsEditingSlide(false); setIsEditingCourse(false); setIsEditingHacienda(false); setIsEditingExperience(false); }}
           className={`pb-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
             activeSegment === 'mensajes' ? 'border-[#122C9B] text-[#122C9B] font-black' : 'border-transparent text-stone-500 hover:text-[#122C9B]'
           }`}
@@ -340,7 +692,7 @@ export default function Admin() {
           Mensajes de Ayuda ({pendingInquiries.length})
         </button>
         <button
-          onClick={() => { setActiveSegment('slides'); setIsEditingProduct(false); setIsEditingSlide(false); }}
+          onClick={() => { setActiveSegment('slides'); setIsEditingProduct(false); setIsEditingSlide(false); setIsEditingCourse(false); setIsEditingHacienda(false); setIsEditingExperience(false); }}
           className={`pb-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
             activeSegment === 'slides' ? 'border-[#122C9B] text-[#122C9B] font-black' : 'border-transparent text-stone-500 hover:text-[#122C9B]'
           }`}
@@ -348,12 +700,44 @@ export default function Admin() {
           Banner Home
         </button>
         <button
-          onClick={() => { setActiveSegment('reservas'); setIsEditingProduct(false); setIsEditingSlide(false); }}
+          onClick={() => { setActiveSegment('reservas'); setIsEditingProduct(false); setIsEditingSlide(false); setIsEditingCourse(false); setIsEditingHacienda(false); setIsEditingExperience(false); }}
           className={`pb-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
             activeSegment === 'reservas' ? 'border-[#122C9B] text-[#122C9B] font-black' : 'border-transparent text-stone-500 hover:text-[#122C9B]'
           }`}
         >
           Reservas ({reservations.length})
+        </button>
+        <button
+          onClick={() => { setActiveSegment('cursos'); setIsEditingProduct(false); setIsEditingSlide(false); setIsEditingCourse(false); setIsEditingHacienda(false); setIsEditingExperience(false); }}
+          className={`pb-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
+            activeSegment === 'cursos' ? 'border-[#122C9B] text-[#122C9B] font-black' : 'border-transparent text-stone-500 hover:text-[#122C9B]'
+          }`}
+        >
+          Cursos Academia ({courses.length})
+        </button>
+        <button
+          onClick={() => { setActiveSegment('estadias'); setIsEditingProduct(false); setIsEditingSlide(false); setIsEditingCourse(false); setIsEditingHacienda(false); setIsEditingExperience(false); }}
+          className={`pb-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
+            activeSegment === 'estadias' ? 'border-[#122C9B] text-[#122C9B] font-black' : 'border-transparent text-stone-500 hover:text-[#122C9B]'
+          }`}
+        >
+          Estadías ({haciendas.length})
+        </button>
+        <button
+          onClick={() => { setActiveSegment('experiencias'); setIsEditingProduct(false); setIsEditingSlide(false); setIsEditingCourse(false); setIsEditingHacienda(false); setIsEditingExperience(false); }}
+          className={`pb-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
+            activeSegment === 'experiencias' ? 'border-[#122C9B] text-[#122C9B] font-black' : 'border-transparent text-stone-500 hover:text-[#122C9B]'
+          }`}
+        >
+          Experiencias ({experiences.length})
+        </button>
+        <button
+          onClick={() => { setActiveSegment('usuarios'); setIsEditingProduct(false); setIsEditingSlide(false); setIsEditingCourse(false); setIsEditingHacienda(false); setIsEditingExperience(false); }}
+          className={`pb-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
+            activeSegment === 'usuarios' ? 'border-[#122C9B] text-[#122C9B] font-black' : 'border-transparent text-stone-500 hover:text-[#122C9B]'
+          }`}
+        >
+          Usuarios ({users.length})
         </button>
       </div>
 
@@ -467,16 +851,11 @@ export default function Admin() {
             </div>
           </div>
 
-          <div className="space-y-1">
-            <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Foto Url Referencia</label>
-            <input
-              type="text"
-              required
-              value={prodForm.imagen_url}
-              onChange={(e) => setProdForm({ ...prodForm, imagen_url: e.target.value })}
-              className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs"
-            />
-          </div>
+          <ImageUploadField
+            label="Foto del producto"
+            value={prodForm.imagen_url}
+            onChange={(url) => setProdForm({ ...prodForm, imagen_url: url })}
+          />
 
           <div className="pt-2 flex gap-4">
             <button
@@ -790,22 +1169,12 @@ export default function Admin() {
                     </div>
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="block text-xs font-bold text-stone-700 font-mono uppercase">URL de Imagen de Fondo</label>
-                    <input
-                      type="text"
-                      required
-                      value={slideForm.bgImage}
-                      onChange={(e) => setSlideForm({ ...slideForm, bgImage: e.target.value })}
-                      placeholder="https://images.unsplash.com/photo-..."
-                      className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs"
-                    />
-                    {slideForm.bgImage && (
-                      <div className="mt-2 rounded-lg overflow-hidden h-32 bg-stone-100">
-                        <img src={slideForm.bgImage} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                      </div>
-                    )}
-                  </div>
+                  <ImageUploadField
+                    label="Imagen de fondo"
+                    value={slideForm.bgImage}
+                    onChange={(url) => setSlideForm({ ...slideForm, bgImage: url })}
+                    placeholder="https://images.unsplash.com/photo-..."
+                  />
 
                   <div className="flex items-center gap-4">
                     <div className="space-y-1">
@@ -995,6 +1364,767 @@ export default function Admin() {
                   </table>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* SEGMENT 6: CURSOS ACADEMIA */}
+          {activeSegment === 'cursos' && (
+            <>
+              {isEditingCourse ? (
+                <form onSubmit={handleSaveCourseSubmit} className="bg-white border border-stone-200 rounded-2xl p-8 shadow space-y-6">
+                  <h3 className="font-display text-xl font-bold text-stone-900 border-b border-stone-100 pb-3 flex items-center gap-2">
+                    <GraduationCap className="w-5 h-5 text-[#FFA42C]" />
+                    <span>{editingCourseId ? 'Editar Curso' : 'Crear Nuevo Curso'}</span>
+                  </h3>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Título del curso</label>
+                      <input
+                        type="text"
+                        required
+                        value={courseForm.title}
+                        onChange={(e) => setCourseForm({ ...courseForm, title: e.target.value })}
+                        placeholder="Curso Integral de Barismo Básico"
+                        className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs font-medium"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Nivel</label>
+                      <input
+                        type="text"
+                        required
+                        value={courseForm.level}
+                        onChange={(e) => setCourseForm({ ...courseForm, level: e.target.value })}
+                        placeholder="Principiante"
+                        className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs font-medium"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Duración</label>
+                      <input
+                        type="text"
+                        required
+                        value={courseForm.duration}
+                        onChange={(e) => setCourseForm({ ...courseForm, duration: e.target.value })}
+                        placeholder="30 horas"
+                        className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs font-medium"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Precio (texto libre)</label>
+                      <input
+                        type="text"
+                        required
+                        value={courseForm.price}
+                        onChange={(e) => setCourseForm({ ...courseForm, price: e.target.value })}
+                        placeholder="$2.200.000"
+                        className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs font-medium"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Cupo máximo</label>
+                      <input
+                        type="number"
+                        min="1"
+                        required
+                        value={courseForm.maxPeople}
+                        onChange={(e) => setCourseForm({ ...courseForm, maxPeople: parseInt(e.target.value) || 1 })}
+                        className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Detalle de precio (opcional)</label>
+                    <input
+                      type="text"
+                      value={courseForm.priceDetail}
+                      onChange={(e) => setCourseForm({ ...courseForm, priceDetail: e.target.value })}
+                      placeholder="Curso completo · 5 módulos de 6 hrs c/u"
+                      className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Descripción</label>
+                    <textarea
+                      required
+                      value={courseForm.description}
+                      onChange={(e) => setCourseForm({ ...courseForm, description: e.target.value })}
+                      rows={3}
+                      className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs resize-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Temario (un ítem por línea)</label>
+                    <textarea
+                      required
+                      value={courseForm.syllabus}
+                      onChange={(e) => setCourseForm({ ...courseForm, syllabus: e.target.value })}
+                      placeholder={'Historia del café, origen, especies y variedades.\nBarista Espresso básico...'}
+                      rows={6}
+                      className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs resize-none"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Orden</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={courseForm.orden}
+                        onChange={(e) => setCourseForm({ ...courseForm, orden: parseInt(e.target.value) || 1 })}
+                        className="w-20 px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2 pt-5">
+                      <input
+                        type="checkbox"
+                        id="curso-activo"
+                        checked={courseForm.activo}
+                        onChange={(e) => setCourseForm({ ...courseForm, activo: e.target.checked })}
+                        className="w-4 h-4 rounded"
+                      />
+                      <label htmlFor="curso-activo" className="text-xs font-medium text-stone-700">Curso activo</label>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 flex gap-4">
+                    <button
+                      type="submit"
+                      className="px-6 py-3 bg-[#122C9B] hover:bg-[#FFA42C] text-white font-bold rounded-xl text-xs cursor-pointer transition-colors"
+                    >
+                      Guardar Curso
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingCourse(false)}
+                      className="px-6 py-3 bg-white border border-stone-300 text-stone-700 rounded-xl text-xs"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden shadow-sm">
+                  <div className="p-6 bg-stone-50 border-b border-stone-150 flex justify-between items-center">
+                    <h3 className="font-display font-bold text-stone-900 text-sm">Cursos de la Academia ({courses.length})</h3>
+                    <button
+                      onClick={handleCreateCourseClick}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-[#122C9B] text-white rounded-lg text-xs font-bold cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Crear Curso</span>
+                    </button>
+                  </div>
+
+                  <div className="divide-y divide-stone-150">
+                    {courses.map((c) => (
+                      <div key={c.id} className="p-4 flex items-center gap-4 hover:bg-stone-50/50">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-sm text-stone-900 truncate">{c.title}</p>
+                          <p className="text-[10px] text-stone-500 font-mono truncate">{c.level} • {c.duration} • {c.price}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${c.activo ? 'bg-emerald-50 text-emerald-800' : 'bg-stone-100 text-stone-500'}`}>
+                            {c.activo ? 'Activo' : 'Inactivo'}
+                          </span>
+                          <button
+                            onClick={() => handleEditCourseClick(c)}
+                            className="p-1.5 px-3 bg-stone-100 hover:bg-stone-200 border border-stone-200 rounded-lg text-stone-700 cursor-pointer"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteCourse(c.id)}
+                            className="p-1.5 px-3 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg text-rose-700 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* SEGMENT 7: ESTADÍAS / HACIENDAS */}
+          {activeSegment === 'estadias' && (
+            <>
+              {isEditingHacienda ? (
+                <form onSubmit={handleSaveHaciendaSubmit} className="bg-white border border-stone-200 rounded-2xl p-8 shadow space-y-6">
+                  <h3 className="font-display text-xl font-bold text-stone-900 border-b border-stone-100 pb-3 flex items-center gap-2">
+                    <Tent className="w-5 h-5 text-[#FFA42C]" />
+                    <span>{editingHaciendaId ? 'Editar Estadía' : 'Crear Nueva Estadía'}</span>
+                  </h3>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Nombre</label>
+                      <input
+                        type="text"
+                        required
+                        value={haciendaForm.nombre}
+                        onChange={(e) => setHaciendaForm({ ...haciendaForm, nombre: e.target.value })}
+                        placeholder="Glamping Finca Cafetera"
+                        className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs font-medium"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Tipo / Etiqueta</label>
+                      <input
+                        type="text"
+                        required
+                        value={haciendaForm.tipo}
+                        onChange={(e) => setHaciendaForm({ ...haciendaForm, tipo: e.target.value })}
+                        placeholder="Glamping"
+                        className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs font-medium"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Descripción corta (para el listado)</label>
+                    <input
+                      type="text"
+                      required
+                      value={haciendaForm.descripcion_corta}
+                      onChange={(e) => setHaciendaForm({ ...haciendaForm, descripcion_corta: e.target.value })}
+                      placeholder="Experiencia ecológica con fogata, atardeceres y caminatas entre cafetales."
+                      className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Descripción completa</label>
+                    <textarea
+                      required
+                      value={haciendaForm.descripcion}
+                      onChange={(e) => setHaciendaForm({ ...haciendaForm, descripcion: e.target.value })}
+                      rows={3}
+                      className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs resize-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Ubicación</label>
+                      <input
+                        type="text"
+                        required
+                        value={haciendaForm.ubicacion}
+                        onChange={(e) => setHaciendaForm({ ...haciendaForm, ubicacion: e.target.value })}
+                        placeholder="Silvania, Cundinamarca"
+                        className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Capacidad máxima</label>
+                      <input
+                        type="number"
+                        min="1"
+                        required
+                        value={haciendaForm.capacidad_max}
+                        onChange={(e) => setHaciendaForm({ ...haciendaForm, capacidad_max: parseInt(e.target.value) || 1 })}
+                        className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Precio por noche (COP)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        required
+                        value={haciendaForm.precio_noche}
+                        onChange={(e) => setHaciendaForm({ ...haciendaForm, precio_noche: e.target.value })}
+                        placeholder="350000"
+                        className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <ImageUploadField
+                    label="Imagen principal"
+                    value={haciendaForm.imagen_url}
+                    onChange={(url) => setHaciendaForm({ ...haciendaForm, imagen_url: url })}
+                    placeholder="/images/TURISMO/GLAMP1.webp"
+                  />
+
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Galería (una imagen por línea)</label>
+                    <textarea
+                      value={haciendaForm.galeria}
+                      onChange={(e) => setHaciendaForm({ ...haciendaForm, galeria: e.target.value })}
+                      placeholder={'/images/TURISMO/GLAMP1.webp\n/images/TURISMO/GLAMP2.webp'}
+                      rows={4}
+                      className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs resize-none"
+                    />
+                    <input
+                      ref={haciendaGalleryFileRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      onChange={handleHaciendaGalleryUpload}
+                      hidden
+                    />
+                    <button
+                      type="button"
+                      onClick={() => haciendaGalleryFileRef.current?.click()}
+                      disabled={uploadingGallery}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-stone-100 hover:bg-stone-200 border border-stone-200 rounded-lg text-stone-700 text-xs font-bold cursor-pointer disabled:opacity-50"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>{uploadingGallery ? 'Subiendo...' : 'Subir y agregar a la galería'}</span>
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Features (ícono + texto)</label>
+                    {haciendaForm.features.map((f, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <select
+                          value={f.icono}
+                          onChange={(e) => handleUpdateHaciendaFeature(idx, { icono: e.target.value })}
+                          className="px-3 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs w-36"
+                        >
+                          {HACIENDA_ICONS.map((icon) => (
+                            <option key={icon} value={icon}>{icon}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          value={f.texto}
+                          onChange={(e) => handleUpdateHaciendaFeature(idx, { texto: e.target.value })}
+                          placeholder="WiFi gratuito"
+                          className="flex-1 px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveHaciendaFeature(idx)}
+                          className="p-2 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg text-rose-700 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={handleAddHaciendaFeature}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-lg text-xs font-bold cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Agregar feature</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-stone-700 font-mono uppercase">URL de Airbnb</label>
+                      <input
+                        type="text"
+                        value={haciendaForm.airbnb_url}
+                        onChange={(e) => setHaciendaForm({ ...haciendaForm, airbnb_url: e.target.value })}
+                        placeholder="https://www.airbnb.es/h/..."
+                        className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-stone-700 font-mono uppercase">URL de Booking</label>
+                      <input
+                        type="text"
+                        value={haciendaForm.booking_url}
+                        onChange={(e) => setHaciendaForm({ ...haciendaForm, booking_url: e.target.value })}
+                        className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-stone-700 font-mono uppercase">URL de Google Maps</label>
+                      <input
+                        type="text"
+                        value={haciendaForm.google_maps_url}
+                        onChange={(e) => setHaciendaForm({ ...haciendaForm, google_maps_url: e.target.value })}
+                        placeholder="https://maps.app.goo.gl/..."
+                        className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-6 flex-wrap">
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Orden</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={haciendaForm.orden}
+                        onChange={(e) => setHaciendaForm({ ...haciendaForm, orden: parseInt(e.target.value) || 1 })}
+                        className="w-20 px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2 pt-5">
+                      <input
+                        type="checkbox"
+                        id="hacienda-pet"
+                        checked={haciendaForm.pet_friendly}
+                        onChange={(e) => setHaciendaForm({ ...haciendaForm, pet_friendly: e.target.checked })}
+                        className="w-4 h-4 rounded"
+                      />
+                      <label htmlFor="hacienda-pet" className="text-xs font-medium text-stone-700">Pet friendly</label>
+                    </div>
+                    <div className="flex items-center gap-2 pt-5">
+                      <input
+                        type="checkbox"
+                        id="hacienda-activo"
+                        checked={haciendaForm.activo}
+                        onChange={(e) => setHaciendaForm({ ...haciendaForm, activo: e.target.checked })}
+                        className="w-4 h-4 rounded"
+                      />
+                      <label htmlFor="hacienda-activo" className="text-xs font-medium text-stone-700">Estadía activa</label>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 flex gap-4">
+                    <button
+                      type="submit"
+                      className="px-6 py-3 bg-[#122C9B] hover:bg-[#FFA42C] text-white font-bold rounded-xl text-xs cursor-pointer transition-colors"
+                    >
+                      Guardar Estadía
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingHacienda(false)}
+                      className="px-6 py-3 bg-white border border-stone-300 text-stone-700 rounded-xl text-xs"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden shadow-sm">
+                  <div className="p-6 bg-stone-50 border-b border-stone-150 flex justify-between items-center">
+                    <h3 className="font-display font-bold text-stone-900 text-sm">Estadías ({haciendas.length})</h3>
+                    <button
+                      onClick={handleCreateHaciendaClick}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-[#122C9B] text-white rounded-lg text-xs font-bold cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Crear Estadía</span>
+                    </button>
+                  </div>
+
+                  <div className="divide-y divide-stone-150">
+                    {haciendas.map((h) => (
+                      <div key={h.id} className="p-4 flex items-center gap-4 hover:bg-stone-50/50">
+                        <div className="w-24 h-16 rounded-lg overflow-hidden bg-stone-100 flex-shrink-0">
+                          <img src={h.imagen_url} alt={h.nombre} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-sm text-stone-900 truncate">{h.nombre}</p>
+                          <p className="text-[10px] text-stone-500 font-mono truncate">{h.tipo} • ${h.precio_noche.toLocaleString('es-CO')}/noche • Máx {h.capacidad_max}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${h.activo ? 'bg-emerald-50 text-emerald-800' : 'bg-stone-100 text-stone-500'}`}>
+                            {h.activo ? 'Activa' : 'Inactiva'}
+                          </span>
+                          <button
+                            onClick={() => handleEditHaciendaClick(h)}
+                            className="p-1.5 px-3 bg-stone-100 hover:bg-stone-200 border border-stone-200 rounded-lg text-stone-700 cursor-pointer"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteHacienda(h.id)}
+                            className="p-1.5 px-3 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg text-rose-700 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* SEGMENT 8: EXPERIENCIAS */}
+          {activeSegment === 'experiencias' && (
+            <>
+              {isEditingExperience ? (
+                <form onSubmit={handleSaveExperienceSubmit} className="bg-white border border-stone-200 rounded-2xl p-8 shadow space-y-6">
+                  <h3 className="font-display text-xl font-bold text-stone-900 border-b border-stone-100 pb-3 flex items-center gap-2">
+                    <Coffee className="w-5 h-5 text-[#FFA42C]" />
+                    <span>{editingExperienceId ? 'Editar Experiencia' : 'Crear Nueva Experiencia'}</span>
+                  </h3>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Nombre</label>
+                      <input
+                        type="text"
+                        required
+                        value={experienceForm.nombre}
+                        onChange={(e) => setExperienceForm({ ...experienceForm, nombre: e.target.value })}
+                        placeholder="Cata de Cafés de Especialidad"
+                        className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs font-medium"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Precio (COP)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        required
+                        value={experienceForm.precio}
+                        onChange={(e) => setExperienceForm({ ...experienceForm, precio: e.target.value })}
+                        placeholder="90000"
+                        className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs font-medium"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Descripción</label>
+                    <textarea
+                      required
+                      value={experienceForm.descripcion}
+                      onChange={(e) => setExperienceForm({ ...experienceForm, descripcion: e.target.value })}
+                      rows={3}
+                      className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs resize-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Duración (minutos)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        required
+                        value={experienceForm.duracion_min}
+                        onChange={(e) => setExperienceForm({ ...experienceForm, duracion_min: parseInt(e.target.value) || 1 })}
+                        className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Capacidad máxima</label>
+                      <input
+                        type="number"
+                        min="1"
+                        required
+                        value={experienceForm.capacidad_max}
+                        onChange={(e) => setExperienceForm({ ...experienceForm, capacidad_max: parseInt(e.target.value) || 1 })}
+                        className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <ImageUploadField
+                    label="Imagen principal"
+                    value={experienceForm.imagen_url}
+                    onChange={(url) => setExperienceForm({ ...experienceForm, imagen_url: url })}
+                  />
+
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Galería (una imagen por línea)</label>
+                    <textarea
+                      value={experienceForm.imagenes}
+                      onChange={(e) => setExperienceForm({ ...experienceForm, imagenes: e.target.value })}
+                      rows={4}
+                      className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs resize-none"
+                    />
+                    <input
+                      ref={experienceGalleryFileRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      onChange={handleExperienceGalleryUpload}
+                      hidden
+                    />
+                    <button
+                      type="button"
+                      onClick={() => experienceGalleryFileRef.current?.click()}
+                      disabled={uploadingGallery}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-stone-100 hover:bg-stone-200 border border-stone-200 rounded-lg text-stone-700 text-xs font-bold cursor-pointer disabled:opacity-50"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>{uploadingGallery ? 'Subiendo...' : 'Subir y agregar a la galería'}</span>
+                    </button>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Detalles incluidos (uno por línea)</label>
+                    <textarea
+                      value={experienceForm.detalles_incluidos}
+                      onChange={(e) => setExperienceForm({ ...experienceForm, detalles_incluidos: e.target.value })}
+                      rows={3}
+                      className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs resize-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Recomendaciones (una por línea)</label>
+                    <textarea
+                      value={experienceForm.recomendaciones}
+                      onChange={(e) => setExperienceForm({ ...experienceForm, recomendaciones: e.target.value })}
+                      rows={3}
+                      className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs resize-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Booking widget (HTML, opcional)</label>
+                    <textarea
+                      value={experienceForm.booking_widget}
+                      onChange={(e) => setExperienceForm({ ...experienceForm, booking_widget: e.target.value })}
+                      rows={2}
+                      className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs resize-none font-mono"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="experiencia-activo"
+                      checked={experienceForm.activo}
+                      onChange={(e) => setExperienceForm({ ...experienceForm, activo: e.target.checked })}
+                      className="w-4 h-4 rounded"
+                    />
+                    <label htmlFor="experiencia-activo" className="text-xs font-medium text-stone-700">Experiencia activa</label>
+                  </div>
+
+                  <div className="pt-4 flex gap-4">
+                    <button
+                      type="submit"
+                      className="px-6 py-3 bg-[#122C9B] hover:bg-[#FFA42C] text-white font-bold rounded-xl text-xs cursor-pointer transition-colors"
+                    >
+                      Guardar Experiencia
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingExperience(false)}
+                      className="px-6 py-3 bg-white border border-stone-300 text-stone-700 rounded-xl text-xs"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden shadow-sm">
+                  <div className="p-6 bg-stone-50 border-b border-stone-150 flex justify-between items-center">
+                    <h3 className="font-display font-bold text-stone-900 text-sm">Experiencias ({experiences.length})</h3>
+                    <button
+                      onClick={handleCreateExperienceClick}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-[#122C9B] text-white rounded-lg text-xs font-bold cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Crear Experiencia</span>
+                    </button>
+                  </div>
+
+                  <div className="divide-y divide-stone-150">
+                    {experiences.map((exp) => (
+                      <div key={exp.id} className="p-4 flex items-center gap-4 hover:bg-stone-50/50">
+                        <div className="w-24 h-16 rounded-lg overflow-hidden bg-stone-100 flex-shrink-0">
+                          <img src={exp.imagen_url} alt={exp.nombre} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-sm text-stone-900 truncate">{exp.nombre}</p>
+                          <p className="text-[10px] text-stone-500 font-mono truncate">${exp.precio.toLocaleString('es-CO')} • {exp.duracion_min} min • Máx {exp.capacidad_max}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${exp.activo ? 'bg-emerald-50 text-emerald-800' : 'bg-stone-100 text-stone-500'}`}>
+                            {exp.activo ? 'Activa' : 'Inactiva'}
+                          </span>
+                          <button
+                            onClick={() => handleEditExperienceClick(exp)}
+                            className="p-1.5 px-3 bg-stone-100 hover:bg-stone-200 border border-stone-200 rounded-lg text-stone-700 cursor-pointer"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteExperience(exp.id)}
+                            className="p-1.5 px-3 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg text-rose-700 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* SEGMENT 9: USUARIOS */}
+          {activeSegment === 'usuarios' && (
+            <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden shadow-sm">
+              <div className="p-6 bg-stone-50 border-b border-stone-150">
+                <h3 className="font-display font-bold text-stone-900 text-sm">Usuarios ({users.length})</h3>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-stone-105 border-b border-stone-150 text-stone-500 font-mono uppercase">
+                      <th className="p-4 font-semibold">Nombre / Email</th>
+                      <th className="p-4 font-semibold">Teléfono</th>
+                      <th className="p-4 font-semibold">Rol</th>
+                      <th className="p-4 font-semibold">Registrado</th>
+                      <th className="p-4 text-center font-semibold">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-150">
+                    {users.map((u) => {
+                      const isSelf = u.id === user?.id;
+                      return (
+                        <tr key={u.id} className="hover:bg-stone-50/50">
+                          <td className="p-4">
+                            <p className="font-bold text-stone-900 text-sm">{u.nombre} {u.apellido}</p>
+                            <p className="text-[10px] text-stone-400 font-mono">{u.email}</p>
+                          </td>
+                          <td className="p-4 text-stone-700">{u.telefono || '—'}</td>
+                          <td className="p-4">
+                            <select
+                              value={u.rol}
+                              disabled={isSelf}
+                              onChange={(e) => handleChangeUserRole(u.id, e.target.value as UserRole)}
+                              className="px-2 py-1.5 bg-stone-50 border border-stone-300 rounded-lg text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <option value="admin">Admin</option>
+                              <option value="editor">Editor</option>
+                              <option value="support">Support</option>
+                              <option value="cliente">Cliente</option>
+                            </select>
+                          </td>
+                          <td className="p-4 font-mono text-stone-500">
+                            {new Date(u.created_at).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </td>
+                          <td className="p-4 text-center">
+                            {isSelf ? (
+                              <span className="text-[10px] text-stone-400 font-mono uppercase">Tú</span>
+                            ) : (
+                              <button
+                                onClick={() => handleDeleteUser(u.id)}
+                                className="p-1 px-2.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded text-rose-700 cursor-pointer"
+                                title="Eliminar usuario"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 

@@ -1,46 +1,22 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, Coffee, TreePine, Sunrise, Moon, Users, Calendar, ArrowRight, ExternalLink } from 'lucide-react';
+import axios from 'axios';
+import { MapPin, Coffee, TreePine, Sunrise, Moon, Users, ArrowRight, ExternalLink, Loader2 } from 'lucide-react';
+import { Hacienda } from '../types';
 
-interface Estadia {
-  id: string;
-  tipo: 'glamping' | 'eco-hostal';
-  nombre: string;
-  capacidad: number;
-  precio: number;
-  imagen_principal: string;
-  airbnb_url: string;
-  descripcion_corta: string;
-}
-
-const AIRBNB_GLAMPING = 'https://www.airbnb.es/h/jaguarglampibg';
-const AIRBNB_HOSTAL = 'https://www.airbnb.es/h/jaguarhostal';
 const GOOGLE_MAPS_URL = 'https://maps.app.goo.gl/ekvGgp5soN9PfTr86?g_st=aw';
 
-const estadias: Estadia[] = [
-  {
-    id: 'glamping-familiar',
-    tipo: 'glamping',
-    nombre: 'Glamping Finca Cafetera',
-    capacidad: 8,
-    precio: 350000,
-    imagen_principal: '/images/TURISMO/GLAMP1.webp',
-    airbnb_url: AIRBNB_GLAMPING,
-    descripcion_corta: 'Experiencia ecológica con fogata, atardeceres y caminatas entre cafetales.',
-  },
-  {
-    id: 'eco-hostal',
-    tipo: 'eco-hostal',
-    nombre: 'ECO Hostal',
-    capacidad: 8,
-    precio: 350000,
-    imagen_principal: '/images/TURISMO/HOSTAL1.webp',
-    airbnb_url: AIRBNB_HOSTAL,
-    descripcion_corta: 'Alojamiento sostenible en Finca la Esperanza, rodeado de naturaleza y café.',
-  },
-];
-
 export default function Turismo() {
+  const [haciendas, setHaciendas] = useState<Hacienda[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    axios.get('/api/haciendas')
+      .then(res => setHaciendas(Array.isArray(res.data) ? res.data : []))
+      .catch(err => console.error('Error cargando estadías', err))
+      .finally(() => setLoading(false));
+  }, []);
+
   return (
     <div id="turismo-view" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-16">
 
@@ -80,77 +56,87 @@ export default function Turismo() {
       </div>
 
       {/* Estadías Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {estadias.map((estadia) => (
-          <div
-            key={estadia.id}
-            className="bg-white border border-[#122C9B]/10 rounded-2xl overflow-hidden hover:shadow-xl hover:shadow-[#122C9B]/5 transition-all duration-300 group"
-          >
-            {/* Image */}
-            <Link to={estadia.tipo === 'glamping' ? '/turismo/glamping' : '/turismo/eco-hostal'}>
-              <div className="relative aspect-[4/3] bg-[#122C9B]/5 overflow-hidden">
-                <img
-                  src={estadia.imagen_principal}
-                  alt={estadia.nombre}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                />
-                <div className="absolute top-4 left-4 bg-[#122C9B] text-white text-xs font-mono font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-                  {estadia.tipo === 'glamping' ? 'Glamping' : 'ECO Hostal'}
+      {loading ? (
+        <div className="text-center py-12">
+          <Loader2 className="w-8 h-8 text-[#FFA42C] animate-spin mx-auto" />
+        </div>
+      ) : haciendas.length === 0 ? (
+        <p className="text-center text-sm text-[#122C9B]/60 py-12">No hay estadías disponibles por el momento.</p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {haciendas.map((hacienda) => (
+            <div
+              key={hacienda.id}
+              className="bg-white border border-[#122C9B]/10 rounded-2xl overflow-hidden hover:shadow-xl hover:shadow-[#122C9B]/5 transition-all duration-300 group"
+            >
+              {/* Image */}
+              <Link to={`/turismo/${hacienda.slug}`}>
+                <div className="relative aspect-[4/3] bg-[#122C9B]/5 overflow-hidden">
+                  <img
+                    src={hacienda.imagen_url}
+                    alt={hacienda.nombre}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  />
+                  <div className="absolute top-4 left-4 bg-[#122C9B] text-white text-xs font-mono font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+                    {hacienda.tipo}
+                  </div>
                 </div>
-              </div>
-            </Link>
+              </Link>
 
-            {/* Info */}
-            <div className="p-6 space-y-4">
-              <div className="space-y-2">
-                <h3 className="font-sans text-xl font-bold text-[#122C9B]">
-                  Finca la Esperanza
-                </h3>
-                <p className="font-sans text-lg font-semibold text-[#122C9B]/80">
-                  {estadia.nombre}
-                </p>
-                <p className="text-xs text-[#122C9B]/60 leading-relaxed">
-                  {estadia.descripcion_corta}
-                </p>
-              </div>
-
-              <div className="flex items-center gap-4 text-xs text-[#122C9B]/60 font-mono">
-                <span className="flex items-center gap-1.5">
-                  <Users className="w-4 h-4 text-[#FFA42C]" />
-                  Capacidad máxima para {estadia.capacidad} personas
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between pt-4 border-t border-[#122C9B]/10">
-                <div className="space-y-1">
-                  <p className="text-xs text-[#122C9B]/50 font-mono uppercase tracking-wider">Desde</p>
-                  <p className="text-2xl font-extrabold text-[#122C9B]">
-                    ${estadia.precio.toLocaleString('es-CO')} COP
+              {/* Info */}
+              <div className="p-6 space-y-4">
+                <div className="space-y-2">
+                  <h3 className="font-sans text-xl font-bold text-[#122C9B]">
+                    Finca la Esperanza
+                  </h3>
+                  <p className="font-sans text-lg font-semibold text-[#122C9B]/80">
+                    {hacienda.nombre}
+                  </p>
+                  <p className="text-xs text-[#122C9B]/60 leading-relaxed">
+                    {hacienda.descripcion_corta}
                   </p>
                 </div>
-                <div className="flex gap-2">
-                  <Link
-                    to={estadia.tipo === 'glamping' ? '/turismo/glamping' : '/turismo/eco-hostal'}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-[#122C9B]/10 hover:bg-[#FFA42C]/10 text-[#122C9B] text-xs font-bold rounded-xl uppercase tracking-wider transition-all"
-                  >
-                    Ver más
-                    <ArrowRight className="w-4 h-4" />
-                  </Link>
-                  <a
-                    href={estadia.airbnb_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-[#FFA42C] hover:bg-[#122C9B] text-white text-xs font-bold rounded-xl uppercase tracking-wider transition-all"
-                  >
-                    Airbnb
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
+
+                <div className="flex items-center gap-4 text-xs text-[#122C9B]/60 font-mono">
+                  <span className="flex items-center gap-1.5">
+                    <Users className="w-4 h-4 text-[#FFA42C]" />
+                    Capacidad máxima para {hacienda.capacidad_max} personas
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between pt-4 border-t border-[#122C9B]/10">
+                  <div className="space-y-1">
+                    <p className="text-xs text-[#122C9B]/50 font-mono uppercase tracking-wider">Desde</p>
+                    <p className="text-2xl font-extrabold text-[#122C9B]">
+                      ${hacienda.precio_noche.toLocaleString('es-CO')} COP
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Link
+                      to={`/turismo/${hacienda.slug}`}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-[#122C9B]/10 hover:bg-[#FFA42C]/10 text-[#122C9B] text-xs font-bold rounded-xl uppercase tracking-wider transition-all"
+                    >
+                      Ver más
+                      <ArrowRight className="w-4 h-4" />
+                    </Link>
+                    {hacienda.airbnb_url && (
+                      <a
+                        href={hacienda.airbnb_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-[#FFA42C] hover:bg-[#122C9B] text-white text-xs font-bold rounded-xl uppercase tracking-wider transition-all"
+                      >
+                        Airbnb
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Features Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

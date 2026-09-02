@@ -1,4 +1,4 @@
-import express, { Router } from 'express';
+import { Router } from 'express';
 import * as crypto from 'crypto';
 import { dbService } from '../db';
 import { env } from '../config/env';
@@ -9,12 +9,33 @@ import { OrderStatus } from '../../src/types';
 
 const router = Router();
 
+const WOMPI_BASE_URL = env.VITE_WOMPI_PUBLIC_KEY.startsWith('pub_prod_')
+  ? 'https://production.wompi.co/v1'
+  : 'https://sandbox.wompi.co/v1';
+
 function generateWompiSignature(reference: string, amountInCents: number, currency: string) {
   const concat = reference + amountInCents + currency + env.WOMPI_INTEGRITY_KEY;
   return crypto.createHash('sha256').update(concat).digest('hex');
 }
 
-router.post('/preparar-pago', authenticateToken, checkoutRateLimiter, (req: AuthenticatedRequest, res) => {
+/** Los tokens de aceptación de T&C / datos personales los emite Wompi; no se pueden inventar localmente. */
+async function fetchWompiAcceptanceTokens(): Promise<{ acceptanceToken: string; personalDataAuthToken?: string }> {
+  const res = await fetch(`${WOMPI_BASE_URL}/merchants/${env.VITE_WOMPI_PUBLIC_KEY}`);
+  if (!res.ok) {
+    throw new Error(`Wompi merchant lookup failed with status ${res.status}`);
+  }
+  const body = await res.json();
+  const acceptanceToken = body?.data?.presigned_acceptance?.acceptance_token;
+  if (!acceptanceToken) {
+    throw new Error('Wompi merchant response missing presigned_acceptance.acceptance_token');
+  }
+  return {
+    acceptanceToken,
+    personalDataAuthToken: body?.data?.presigned_personal_data_auth?.acceptance_token,
+  };
+}
+
+router.post('/preparar-pago', authenticateToken, checkoutRateLimiter, async (req: AuthenticatedRequest, res) => {
   try {
     const { total } = req.body;
     if (!total || isNaN(total)) {
@@ -25,20 +46,20 @@ router.post('/preparar-pago', authenticateToken, checkoutRateLimiter, (req: Auth
     const amountInCents = Math.round(total * 100);
     const currency = 'COP';
     const signature = generateWompiSignature(reference, amountInCents, currency);
-
-    // Preset/mock acceptance token for staging popup
-    const acceptanceToken = `acc_tok_presigned_sandbox_${Date.now().toString(36)}`;
+    const { acceptanceToken, personalDataAuthToken } = await fetchWompiAcceptanceTokens();
 
     return res.json({
       reference,
       signature,
       acceptanceToken,
+      personalDataAuthToken,
       amount: amountInCents,
       currency,
       publicKey: env.VITE_WOMPI_PUBLIC_KEY,
     });
   } catch (err: any) {
-    return res.status(500).json({ error: 'Error preparando firma del pago.' });
+    console.error('[WOMPI] Error preparando pago:', err.message);
+    return res.status(502).json({ error: 'No fue posible preparar el pago con la pasarela. Intenta de nuevo.' });
   }
 });
 
@@ -118,30 +139,44 @@ if (env.NODE_ENV !== 'production') {
   });
 }
 
-// Webhook real Wompi con verificación SHA256
-router.post('/wompi-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+/** Lee una ruta tipo "transaction.status" dentro del payload del evento. */
+function getByPath(obj: any, path: string): string {
+  const value = path.split('.').reduce((acc, key) => (acc == null ? acc : acc[key]), obj);
+  return value == null ? '' : String(value);
+}
+
+// Webhook real Wompi — esquema oficial de eventos:
+// checksum = SHA256(valores de signature.properties en orden + timestamp + WOMPI_EVENTS_KEY)
+// https://docs.wompi.co/docs/en-us/eventos
+router.post('/wompi-webhook', async (req, res) => {
   try {
-    const signature = req.headers['x-signature'] as string;
-    if (!signature) {
-      return res.status(401).json({ error: 'Firma no proporcionada.' });
+    const event = req.body;
+    const checksum = event?.signature?.checksum as string | undefined;
+    const properties = event?.signature?.properties as string[] | undefined;
+    const timestamp = event?.timestamp;
+
+    if (!checksum || !Array.isArray(properties) || properties.length === 0 || timestamp == null) {
+      return res.status(400).json({ error: 'Payload de firma inválido.' });
     }
 
-    const rawBody = JSON.stringify(req.body);
-    const checksum = crypto.createHash('sha256')
-      .update(rawBody + env.WOMPI_INTEGRITY_KEY)
+    const concatValues = properties.map((path) => getByPath(event, path)).join('');
+    const expectedChecksum = crypto.createHash('sha256')
+      .update(concatValues + timestamp + env.WOMPI_EVENTS_KEY)
       .digest('hex');
 
-    if (signature !== checksum) {
+    const received = Buffer.from(String(checksum).toLowerCase());
+    const expected = Buffer.from(expectedChecksum);
+    if (received.length !== expected.length || !crypto.timingSafeEqual(received, expected)) {
       console.log('[WOMPI] Invalid webhook signature');
       return res.status(401).json({ error: 'Firma inválida.' });
     }
 
-    const { data } = req.body;
-    if (!data?.transaction?.id || !data?.reference) {
+    const transaction = event?.data?.transaction;
+    if (!transaction?.id || !transaction?.reference) {
       return res.status(400).json({ error: 'Payload inválido.' });
     }
 
-    const { reference, status } = data.transaction;
+    const { reference, status } = transaction;
     const orderStatus: OrderStatus = status === 'APPROVED' ? 'pagado' : 'pendiente';
     const updated = await dbService.updateOrderState(reference, orderStatus);
 

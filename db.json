@@ -501,22 +501,117 @@
   ],
   "haciendas": [
     {
-      "id": "hac_1",
-      "nombre": "Hacienda El Jaguar Real",
-      "descripcion": "Una majestuosa casona cafetera del siglo XIX ubicada en Venecia, Antioquia. Rodeada de exuberante vegetación y senderos con avistamiento de aves, ofrece caminatas guiadas por los cafetales ecológicos, piscinas naturales, cabalgatas y confortables habitaciones con terraza colonial con vista a los Farallones del Citará.",
-      "ubicacion": "Venecia, Antioquia - Km 4 vía Bolombolo",
-      "imagen_url": "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&q=80&w=600",
-      "airbnb_url": "https://airbnb.com/rooms/mock-jaguar-real",
-      "booking_url": "https://booking.com/hotel/co/hacienda-el-jaguar-real.html"
+      "id": "glamping-familiar",
+      "slug": "glamping",
+      "nombre": "Glamping Finca Cafetera",
+      "tipo": "Glamping",
+      "descripcion": "Brindamos una experiencia ecológica de tranquilidad y agro turismo en medio de la naturaleza; se podrá hacer caminatas ecológicas al aire libre, disfrutar de un bello atardecer y compartir de una calurosa fogata mientras se contempla la grandeza de nuestras montañas cafeteras.\n\nEl Glamping, Finca Cafetera Jaguar se encuentra en Silvania y ofrece parqueadero, jardín, WiFi gratuito y vistas a las montañas cafeteras. El alojamiento está a 42 km de Bogotá. Somos pet friendly!",
+      "descripcion_corta": "Experiencia ecológica con fogata, atardeceres y caminatas entre cafetales.",
+      "ubicacion": "Silvania, Cundinamarca — 42 km de Bogotá",
+      "capacidad_max": 8,
+      "precio_noche": 350000,
+      "imagen_url": "/images/TURISMO/GLAMP1.webp",
+      "galeria": [
+        "/images/TURISMO/GLAMP1.webp",
+        "/images/TURISMO/GLAMP2.webp",
+        "/images/TURISMO/GLAMP3.webp",
+        "/images/TURISMO/GLAMP4.webp",
+        "/images/TURISMO/GLAMP5.webp"
+      ],
+      "features": [
+        { "icono": "Sunrise", "texto": "Atardeceres y fogata" },
+        { "icono": "TreePine", "texto": "Caminatas ecológicas" },
+        { "icono": "Coffee", "texto": "Cultura cafetera" },
+        { "icono": "Car", "texto": "Parqueadero" },
+        { "icono": "Wifi", "texto": "WiFi gratuito" },
+        { "icono": "PawPrint", "texto": "Pet friendly" }
+      ],
+      "airbnb_url": "https://www.airbnb.es/h/jaguarglampibg",
+      "booking_url": "",
+      "google_maps_url": "https://maps.app.goo.gl/ekvGgp5soN9PfTr86?g_st=aw",
+      "pet_friendly": true,
+      "orden": 1,
+      "activo": true
     },
     {
-      "id": "hac_2",
-      "nombre": "Finca Cafetera Vista Hermosa",
-      "descripcion": "Ubicada sobre el cañón del río Cauca en Jericó, Antioquia, esta espectacular y moderna cabaña rústica te permite despertar flotando sobre un mar de nubes. El hospedaje incluye una inmersión completa de cosecha en canasto artesanal, molienda a pedal y degustación en fogata campesina.",
-      "ubicacion": "Jericó, Antioquia - Vereda La Soledad",
-      "imagen_url": "https://images.unsplash.com/photo-1546548970-71785318a17b?auto=format&fit=crop&q=80&w=600",
-      "airbnb_url": "https://airbnb.com/rooms/mock-vista-hermosa",
-      "booking_url": "https://booking.com/hotel/co/finca-vista-hermosa-jerico.html"
+      "id": "eco-hostal",
+      "slug": "eco-hostal",
+      "nombre": "ECO Hostal",
+      "tipo": "ECO Hostal",
+      "descripcion": "Un espacio diseñado para quienes buscan reconectarse con la naturaleza sin sacrificar comodidad. Nuestro ECO Hostal ofrece una experiencia de alojamiento sostenible en Finca la Esperanza, en medio de los cultivos de café de Silvania.\n\nPerfecto para grupos, familias o viajeros que buscan una experiencia auténtica y eco-friendly. Disfruta de espacios comunes, zonas verdes, WiFi gratuito y la calidez de la cultura cafetera colombiana. A solo 42 km de Bogotá.",
+      "descripcion_corta": "Alojamiento sostenible en Finca la Esperanza, rodeado de naturaleza y café.",
+      "ubicacion": "Silvania, Cundinamarca",
+      "capacidad_max": 8,
+      "precio_noche": 350000,
+      "imagen_url": "/images/TURISMO/HOSTAL1.webp",
+      "galeria": [
+        "/images/TURISMO/HOSTAL1.webp",
+        "/images/TURISMO/HOSTAL2.webp",
+        "/images/TURISMO/HOSTAL3.webp",
+        "/images/TURISMO/HOSTAL4.webp"
+      ],
+      "features": [
+        { "icono": "TreePine", "texto": "Eco-sostenible" },
+        { "icono": "Users", "texto": "Hasta 8 personas" },
+        { "icono": "Wifi", "texto": "WiFi gratuito" },
+        { "icono": "Moon", "texto": "Noches tranquilas" }
+      ],
+      "airbnb_url": "https://www.airbnb.es/h/jaguarhostal",
+      "booking_url": "",
+      "google_maps_url": "https://maps.app.goo.gl/ekvGgp5soN9PfTr86?g_st=aw",
+      "pet_friendly": false,
+      "orden": 2,
+      "activo": true
+    }
+  ],
+  "courses": [
+    {
+      "id": "course_integral_basico",
+      "slug": "curso-integral-de-barismo-basico",
+      "title": "Curso Integral de Barismo Básico",
+      "duration": "30 horas",
+      "level": "Principiante",
+      "price": "$2.200.000",
+      "priceDetail": "Curso completo · 5 módulos de 6 hrs c/u · Cada módulo $550.000 COP",
+      "description": "Formación completa para iniciarse en el mundo del café de especialidad. Incluye Barista Espresso, Brewing, Tueste básico, Catación y Procesos de producción. Ideal para quienes quieren entender el café desde la semilla hasta la taza.",
+      "syllabus": [
+        "Historia del café, origen, especies y variedades.",
+        "Barista Espresso básico: principios de extracción, máquina y molino, organización.",
+        "Barista Brewing básico: métodos de preparación, agua, descriptores, Golden Cup.",
+        "Tueste básico: componentes de la tostadora, control del tueste, cambios físicos, seguridad industrial.",
+        "Catación básica: análisis sensorial, sabores básicos, ácidos orgánicos del café.",
+        "Procesos de producción: procesamiento, clasificación, buenas prácticas.",
+        "Arte latte: texturización de leche y figuras básicas."
+      ],
+      "maxPeople": 10,
+      "orden": 1,
+      "activo": true,
+      "created_at": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "course_sca_intermedio",
+      "slug": "curso-certificacion-sca-intermedio-profesional",
+      "title": "Curso de Certificación SCA Intermedio / Profesional",
+      "duration": "Mínimo 14 horas",
+      "level": "Intermedio a Profesional",
+      "price": "Desde $3.800.000",
+      "priceDetail": "Intermedio $3.800.000 COP · Profesional $4.000.000 COP",
+      "description": "Certificación internacional de la Specialty Coffee Association (SCA) dirigida a baristas, tostadores y catadores con experiencia que buscan perfeccionar su técnica y alcanzar un nivel profesional avalado a nivel mundial.",
+      "syllabus": [
+        "Inscripción a la Specialty Coffee Association (SCA).",
+        "Examen teórico y práctico avalado por la SCA.",
+        "Materiales de estudio especializados y materia prima para prácticas.",
+        "Certificación oficial emitida por la SCA.",
+        "Barista Skills Intermedio/Profesional: control del espresso, análisis sensorial, arte latte y flujo de trabajo.",
+        "Brewing Intermedio/Profesional: variables de extracción, uso de refractómetro, Brewing Control Chart y métodos de filtrado.",
+        "Café Verde Intermedio/Profesional: botánica, procesos, mercados, contratos, almacenamiento y clasificación.",
+        "Tueste Intermedio/Profesional: perfiles de tueste, termodinámica, transferencia de calor y tueste de muestras.",
+        "Sensory Skills Intermedio/Profesional: fisiología del gusto, pruebas triangulares, SCA Flavor Wheel y paneles sensoriales."
+      ],
+      "maxPeople": 10,
+      "orden": 2,
+      "activo": true,
+      "created_at": "2026-01-01T00:00:00.000Z"
     }
   ],
   "slides": [

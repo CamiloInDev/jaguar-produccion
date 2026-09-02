@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { dbService } from '../db';
 import { authenticateToken, requireRole } from '../middleware/auth';
 import { slideValidation, handleValidationErrors } from '../middleware/validate';
+import { deleteUploadedFile } from '../lib/uploads';
 
 const router = Router();
 
@@ -60,6 +61,7 @@ router.post('/', authenticateToken, requireRole('admin', 'editor'), slideValidat
 router.put('/:id', authenticateToken, requireRole('admin', 'editor'), slideValidation, handleValidationErrors, async (req, res) => {
   try {
     const { title, subtitle, badge, buttonText, buttonLink, button2Text, button2Link, bgImage, orden, activo } = req.body;
+    const previous = await dbService.getSlideById(req.params.id);
     await dbService.saveSlide({
       id: req.params.id,
       title,
@@ -73,6 +75,9 @@ router.put('/:id', authenticateToken, requireRole('admin', 'editor'), slideValid
       orden: orden || 1,
       activo: activo !== undefined ? activo : true,
     });
+    if (previous && previous.bgImage !== bgImage) {
+      await deleteUploadedFile(previous.bgImage);
+    }
     return res.json({ success: true, message: 'Slide actualizado exitosamente.' });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
@@ -81,7 +86,9 @@ router.put('/:id', authenticateToken, requireRole('admin', 'editor'), slideValid
 
 router.delete('/:id', authenticateToken, requireRole('admin', 'editor'), async (req, res) => {
   try {
+    const existing = await dbService.getSlideById(req.params.id);
     await dbService.deleteSlide(req.params.id);
+    if (existing) await deleteUploadedFile(existing.bgImage);
     return res.json({ success: true, message: 'Slide eliminado.' });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });

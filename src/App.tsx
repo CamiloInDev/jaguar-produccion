@@ -9,6 +9,7 @@ import { ToastContainer } from './components/Toast';
 import PrivacyConsent from './components/PrivacyConsent';
 import ScrollToTop from './components/ScrollToTop';
 import FloatingCart from './components/FloatingCart';
+import ChatBubble from './components/ChatBubble';
 
 // Pages
 import Home from './pages/Home';
@@ -17,8 +18,7 @@ import ProductDetail from './pages/ProductDetail';
 import Experiencias from './pages/Experiencias';
 import ExperienciaDetail from './pages/ExperienciaDetail';
 import Turismo from './pages/Turismo';
-import GlampingDetail from './pages/GlampingDetail';
-import EcoHostalDetail from './pages/EcoHostalDetail';
+import HaciendaDetail from './pages/HaciendaDetail';
 import Academia from './pages/Academia';
 import CasaJaguar from './pages/CasaJaguar';
 import NuestraPlanta from './pages/NuestraPlanta';
@@ -26,6 +26,8 @@ import Contacto from './pages/Contacto';
 import Privacidad from './pages/Privacidad';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import RecuperarPassword from './pages/RecuperarPassword';
+import RestablecerPassword from './pages/RestablecerPassword';
 import CartPage from './pages/CartPage';
 import CheckoutPage from './pages/CheckoutPage';
 import ConfirmationPage from './pages/ConfirmationPage';
@@ -62,6 +64,7 @@ export default function App() {
       <div className="min-h-screen bg-[#FAF8F5] flex flex-col justify-between">
         <Navbar />
         <FloatingCart />
+        <ChatBubble />
 
         {/* Core dynamic route display panel */}
         <main className="flex-grow">
@@ -73,8 +76,7 @@ export default function App() {
             <Route path="/experiencias" element={<Experiencias />} />
             <Route path="/experiencias/:slug" element={<ExperienciaDetail />} />
             <Route path="/turismo" element={<Turismo />} />
-            <Route path="/turismo/glamping" element={<GlampingDetail />} />
-            <Route path="/turismo/eco-hostal" element={<EcoHostalDetail />} />
+            <Route path="/turismo/:slug" element={<HaciendaDetail />} />
             <Route path="/academia" element={<Academia />} />
             <Route path="/casa-jaguar" element={<CasaJaguar />} />
             <Route path="/nuestra-planta" element={<NuestraPlanta />} />
@@ -84,6 +86,8 @@ export default function App() {
             {/* Authentication Entries */}
             <Route path="/auth/login" element={<Login />} />
             <Route path="/auth/registro" element={<Register />} />
+            <Route path="/auth/recuperar" element={<RecuperarPassword />} />
+            <Route path="/auth/restablecer" element={<RestablecerPassword />} />
             
             {/* Purchase cart flows */}
             <Route path="/carrito" element={<CartPage />} />

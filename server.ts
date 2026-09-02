@@ -14,11 +14,14 @@ import authRoutes from './server/routes/auth';
 import productRoutes from './server/routes/products';
 import experienceRoutes from './server/routes/experiences';
 import haciendaRoutes from './server/routes/haciendas';
+import courseRoutes from './server/routes/courses';
+import uploadRoutes from './server/routes/uploads';
 import contactRoutes from './server/routes/contact';
 import orderRoutes from './server/routes/orders';
 import slideRoutes from './server/routes/slides';
 import reservationRoutes from './server/routes/reservations';
 import userRoutes from './server/routes/users';
+import { UPLOADS_DIR, ensureUploadsDir } from './server/lib/uploads';
 
 // -----------------------------------------------------------------------------
 // Global error handlers to catch ALL crashes
@@ -57,7 +60,7 @@ const helmetConfig: HelmetOptions & { crossOriginEmbedderPolicy?: boolean } = {
         directives: {
           defaultSrc: ["'self'"],
           scriptSrc: ["'self'", "https://www.instagram.com", "https://*.cdninstagram.com"],
-          frameSrc: ["'self'", "https://www.instagram.com", "https://*.cdninstagram.com", "https://www.google.com"],
+          frameSrc: ["'self'", "https://www.instagram.com", "https://*.cdninstagram.com", "https://www.google.com", "https://n8n.skatmaskacore.com"],
           imgSrc: ["'self'", "data:", "https://www.instagram.com", "https://*.cdninstagram.com", "https://cafejaguar.com", "https://images.unsplash.com"],
           connectSrc: ["'self'", "https://www.instagram.com"],
           styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
@@ -110,11 +113,19 @@ app.use('/api/auth', authRoutes);
 app.use('/api/productos', productRoutes);
 app.use('/api/experiencias', experienceRoutes);
 app.use('/api/haciendas', haciendaRoutes);
+app.use('/api/cursos', courseRoutes);
+app.use('/api/uploads', uploadRoutes);
 app.use('/api/contacto', contactRoutes);
 app.use('/api/ordenes', orderRoutes);
 app.use('/api/slides', slideRoutes);
 app.use('/api/reservas', reservationRoutes);
 app.use('/api/usuarios', userRoutes);
+
+// -----------------------------------------------------------------------------
+// Archivos subidos por el admin (imágenes optimizadas) — mismo path en dev y prod
+// -----------------------------------------------------------------------------
+ensureUploadsDir();
+app.use('/uploads', express.static(UPLOADS_DIR));
 
 // -----------------------------------------------------------------------------
 // Global error handler

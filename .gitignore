@@ -26,6 +26,12 @@ temp/
 data/
 
 # -----------------------------------------------------------------------------
+# Imágenes subidas desde el panel de Admin (contenido de usuario, no se versiona)
+# -----------------------------------------------------------------------------
+uploads/
+uploads_test/
+
+# -----------------------------------------------------------------------------
 # Editores y sistema operativo
 # -----------------------------------------------------------------------------
 .vscode/
@@ -51,6 +57,11 @@ opencode.json
 skills-lock.json
 
 # -----------------------------------------------------------------------------
+# Claude Code (config/estado local del asistente, no es parte del proyecto)
+# -----------------------------------------------------------------------------
+.claude/
+
+# -----------------------------------------------------------------------------
 # Documentación interna de desarrollo (solo local, no va al repo del cliente)
 # -----------------------------------------------------------------------------
 agents.md
@@ -58,3 +69,4 @@ metadata.json
 DeployTemporal.md
 CONTEXTO.md
 TEST.md
+G-1.md

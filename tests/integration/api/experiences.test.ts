@@ -8,13 +8,13 @@ let app: any;
 beforeAll(async () => {
   const helpers = await import('../../helpers');
   helpers.backupRealDb();
-  helpers.createTestDb();
+  await helpers.createTestDb();
   app = await helpers.createTestApp();
 });
 
 afterAll(async () => {
   const helpers = await import('../../helpers');
-  helpers.restoreRealDb();
+  await helpers.restoreRealDb();
 });
 
 async function getAdminCookies() {
@@ -74,6 +74,34 @@ describe('POST /api/experiencias - Admin', () => {
   });
 });
 
+describe('PUT /api/experiencias/:id - Admin', () => {
+  it('admin can update an experience', async () => {
+    const cookies = await getAdminCookies();
+    await request(app)
+      .post('/api/experiencias')
+      .set('Cookie', cookies)
+      .send({ nombre: 'Experience To Update', descripcion: 'Original description here', duracion_min: 60, precio: 50000, capacidad_max: 8, imagen_url: 'https://example.com/exp.jpg' });
+    const all = await request(app).get('/api/experiencias');
+    const exp = all.body.find((e: any) => e.nombre === 'Experience To Update');
+
+    const res = await request(app)
+      .put(`/api/experiencias/${exp.id}`)
+      .set('Cookie', cookies)
+      .send({ nombre: 'Updated Experience', descripcion: 'Updated description here', duracion_min: 90, precio: 60000, capacidad_max: 10, imagen_url: 'https://example.com/exp2.jpg' });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+
+  it('user cannot update an experience', async () => {
+    const cookies = await getUserCookies();
+    const res = await request(app)
+      .put('/api/experiencias/exp_1')
+      .set('Cookie', cookies)
+      .send({ nombre: 'Hack', descripcion: 'Some description here', duracion_min: 60, precio: 1000, capacidad_max: 1, imagen_url: 'https://x.com/x.jpg' });
+    expect(res.status).toBe(403);
+  });
+});
+
 describe('DELETE /api/experiencias/:id - Admin', () => {
   it('admin can delete an experience', async () => {
     const cookies = await getAdminCookies();
@@ -82,5 +110,11 @@ describe('DELETE /api/experiencias/:id - Admin', () => {
       .set('Cookie', cookies);
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
+  });
+
+  it('user cannot delete an experience', async () => {
+    const cookies = await getUserCookies();
+    const res = await request(app).delete('/api/experiencias/fake-id').set('Cookie', cookies);
+    expect(res.status).toBe(403);
   });
 });
