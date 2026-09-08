@@ -442,11 +442,11 @@ npm run test:e2e       # end-to-end, con el server corriendo aparte
 
 2. **Backups de MySQL.** Configurar respaldos automáticos de la base de datos en Hostinger (hPanel suele tener esta opción en el panel de la base de datos).
 
-3. **Dependencia `csrf-csrf`** está en `package.json` pero no se ve conectada en `server.ts` — confirmar si hace falta en algún flujo o se puede quitar.
+3. **Cuenta de correo SMTP.** El envío real del correo de "recuperar contraseña" necesita una cuenta de correo creada en hPanel (ej. `noreply@tudominio.com`) y sus datos cargados en `SMTP_*` (§4). Sin esto, el link de recuperación solo queda impreso en el log del servidor.
 
-4. **Cuenta de correo SMTP.** El envío real del correo de "recuperar contraseña" necesita una cuenta de correo creada en hPanel (ej. `noreply@tudominio.com`) y sus datos cargados en `SMTP_*` (§4). Sin esto, el link de recuperación solo queda impreso en el log del servidor.
+4. **Persistencia de `uploads/` en Hostinger — sin confirmar (ver §8).** Las imágenes subidas desde el panel de Admin se guardan en disco local del servidor, no en git. Falta confirmar en el primer deploy real si esa carpeta sobrevive a un segundo deploy o se pierde. Si se pierde, evaluar mover el almacenamiento a un servicio externo (Cloudinary, S3-compatible) — la función `optimizeAndSaveImage` en `server/lib/uploads.ts` es el único punto a cambiar.
 
-5. **Persistencia de `uploads/` en Hostinger — sin confirmar (ver §8).** Las imágenes subidas desde el panel de Admin se guardan en disco local del servidor, no en git. Falta confirmar en el primer deploy real si esa carpeta sobrevive a un segundo deploy o se pierde. Si se pierde, evaluar mover el almacenamiento a un servicio externo (Cloudinary, S3-compatible) — la función `optimizeAndSaveImage` en `server/lib/uploads.ts` es el único punto a cambiar.
+5. **`npm audit` marca vulnerabilidades en dependencias transitivas** (axios, mysql2, nanoid, postcss, entre otras) — ninguna introducida a propósito, son actualizaciones disponibles que no se han aplicado porque varias implican saltos de versión mayor (riesgo de breaking changes). Revisar con calma antes de actualizar en bloque.
 
 ---
 
