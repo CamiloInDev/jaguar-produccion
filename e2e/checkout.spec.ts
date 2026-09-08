@@ -26,14 +26,14 @@ test.describe('Checkout Flow', () => {
 
   test('authenticated user can access checkout', async ({ page }) => {
     setupCart(page);
-    await loginAs(page, 'cliente@jaguarcoffee.com', 'cliente123');
+    await loginAs(page, 'cliente@jaguarcoffee.com', 'Cliente123456');
     await go(page, '/checkout');
     await expect(page.locator('#checkout-view').first()).toBeVisible({ timeout: 10000 });
   });
 
   test('checkout has shipping form', async ({ page }) => {
     setupCart(page);
-    await loginAs(page, 'cliente@jaguarcoffee.com', 'cliente123');
+    await loginAs(page, 'cliente@jaguarcoffee.com', 'Cliente123456');
     await go(page, '/checkout');
     await expect(page.locator('#checkout-view select').first()).toBeVisible({ timeout: 5000 });
   });

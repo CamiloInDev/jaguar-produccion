@@ -10,7 +10,7 @@ test.describe('Admin Panel', () => {
     });
 
     test('admin can access admin panel', async ({ page }) => {
-      await loginAs(page, 'admin@jaguarcoffee.com', 'admin123');
+      await loginAs(page, 'admin@jaguarcoffee.com', 'Admin123456');
 
       await page.goto('/admin');
       await page.waitForLoadState('networkidle');
@@ -19,7 +19,7 @@ test.describe('Admin Panel', () => {
     });
 
     test('regular user is redirected from admin', async ({ page }) => {
-      await loginAs(page, 'cliente@jaguarcoffee.com', 'cliente123');
+      await loginAs(page, 'cliente@jaguarcoffee.com', 'Cliente123456');
 
       await page.goto('/admin');
       await page.waitForLoadState('networkidle');
@@ -29,7 +29,7 @@ test.describe('Admin Panel', () => {
 
   test.describe('Admin Product CRUD', () => {
     test.beforeEach(async ({ page }) => {
-      await loginAs(page, 'admin@jaguarcoffee.com', 'admin123');
+      await loginAs(page, 'admin@jaguarcoffee.com', 'Admin123456');
       await page.goto('/admin');
       await page.waitForLoadState('networkidle');
     });
@@ -66,7 +66,7 @@ test.describe('Admin Panel', () => {
 
   test.describe('Admin Slides/Banner Management', () => {
     test('admin can manage slides', async ({ page }) => {
-      await loginAs(page, 'admin@jaguarcoffee.com', 'admin123');
+      await loginAs(page, 'admin@jaguarcoffee.com', 'Admin123456');
 
       await page.goto('/admin');
       await page.waitForLoadState('networkidle');
@@ -87,7 +87,7 @@ test.describe('Admin Panel', () => {
 
   test.describe('Admin Orders Management', () => {
     test('admin can view orders', async ({ page }) => {
-      await loginAs(page, 'admin@jaguarcoffee.com', 'admin123');
+      await loginAs(page, 'admin@jaguarcoffee.com', 'Admin123456');
 
       await page.goto('/admin');
       await page.waitForLoadState('networkidle');

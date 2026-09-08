@@ -39,15 +39,8 @@ export async function loginAs(page: any, email: string, password: string) {
   await page.waitForLoadState('networkidle');
   await acceptPrivacy(page);
 
-  // Use sandbox preset buttons to fill credentials
-  if (email.includes('admin')) {
-    await page.locator('button:has-text("Cargar Administrador")').click();
-  } else {
-    await page.locator('button:has-text("Cargar Cliente de Prueba")').click();
-  }
-  await page.waitForTimeout(300);
-
-  // Submit
+  await page.locator('input[type="email"]').fill(email);
+  await page.locator('input[type="password"]').fill(password);
   await page.locator('button[type="submit"]').click();
   await page.waitForURL('**/mi-cuenta', { timeout: 15000 });
 }

@@ -4,7 +4,7 @@ import { loginAs } from './helpers';
 const authFile = 'e2e/.auth/user.json';
 
 setup('authenticate as admin', async ({ page }) => {
-  await loginAs(page, 'admin@jaguarcoffee.com', 'admin123');
+  await loginAs(page, 'admin@jaguarcoffee.com', 'Admin123456');
   await page.waitForLoadState('networkidle');
   // Set privacy consent in localStorage
   await page.evaluate(() => {
@@ -14,7 +14,7 @@ setup('authenticate as admin', async ({ page }) => {
 });
 
 setup('authenticate as regular user', async ({ page }) => {
-  await loginAs(page, 'cliente@jaguarcoffee.com', 'cliente123');
+  await loginAs(page, 'cliente@jaguarcoffee.com', 'Cliente123456');
   await page.waitForLoadState('networkidle');
   await page.evaluate(() => {
     localStorage.setItem('jaguar_privacy_consent', JSON.stringify({ accepted: true, date: new Date().toISOString() }));

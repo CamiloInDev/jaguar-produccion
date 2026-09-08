@@ -42,5 +42,10 @@ export default defineConfig({
     url: 'http://localhost:3000/api/health',
     reuseExistingServer: !process.env.CI,
     timeout: 60000,
+    // NODE_ENV=test desactiva el rate limiting (ver server/middleware/rateLimiter.ts) —
+    // sin esto, correr toda la suite e2e de un tirón agota el límite de intentos de
+    // auth (10/15min) y los tests que verifican mensajes de error específicos fallan
+    // con 429 en vez del error esperado. Usa jaguar_dev igual (DB_NAME no cambia aquí).
+    env: { NODE_ENV: 'test' },
   },
 });

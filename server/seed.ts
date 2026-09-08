@@ -41,6 +41,22 @@ async function seedAdmin(): Promise<void> {
   console.log(`[SEED] Admin listo: ${env.ADMIN_EMAIL}`);
 }
 
+/** Cuenta de prueba fija para desarrollo local y la suite e2e (e2e/helpers.ts). Nunca en producción. */
+async function seedTestClient(): Promise<void> {
+  if (env.NODE_ENV === 'production') return;
+  await upsert('users', {
+    id: 'usr_cliente_test',
+    email: 'cliente@jaguarcoffee.com',
+    password_hash: hashPassword('Cliente123456'),
+    nombre: 'Cliente',
+    apellido: 'De Prueba',
+    telefono: '3000000000',
+    rol: 'cliente',
+    created_at: new Date().toISOString(),
+  });
+  console.log('[SEED] Cliente de prueba listo: cliente@jaguarcoffee.com');
+}
+
 function readDbJson(): any | null {
   const file = path.join(process.cwd(), 'db.json');
   if (!fs.existsSync(file)) {
@@ -162,6 +178,7 @@ async function seedCatalog(): Promise<void> {
 async function main(): Promise<void> {
   console.log('[SEED] Iniciando seed de MySQL...');
   await seedAdmin();
+  await seedTestClient();
   await seedCatalog();
   console.log('[SEED] Completado ✅');
 }

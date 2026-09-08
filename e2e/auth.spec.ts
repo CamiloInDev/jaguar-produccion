@@ -4,7 +4,7 @@ import { loginAs, acceptPrivacy, removeRequired } from './helpers';
 test.describe('Authentication Flows', () => {
   test.describe('Login', () => {
     test('logs in with valid admin credentials', async ({ page }) => {
-      await loginAs(page, 'admin@jaguarcoffee.com', 'admin123');
+      await loginAs(page, 'admin@jaguarcoffee.com', 'Admin123456');
       await expect(page.locator('text=Administrador').first().or(page.locator('text=admin').first())).toBeVisible({ timeout: 10000 });
     });
 
@@ -56,7 +56,7 @@ test.describe('Authentication Flows', () => {
 
   test.describe('Logout', () => {
     test('logs out successfully', async ({ page }) => {
-      await loginAs(page, 'cliente@jaguarcoffee.com', 'cliente123');
+      await loginAs(page, 'cliente@jaguarcoffee.com', 'Cliente123456');
 
       await page.goto('/auth/login');
       await page.waitForLoadState('networkidle');
