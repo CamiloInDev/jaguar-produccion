@@ -78,6 +78,11 @@ export default function Academia() {
           >
             <summary className="list-none cursor-pointer">
               <div className="space-y-4">
+                {course.imagen_url && (
+                  <div className="-mx-6 -mt-6 mb-2 aspect-[16/9] overflow-hidden rounded-t-2xl bg-[#122C9B]/5">
+                    <img src={course.imagen_url} alt={course.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  </div>
+                )}
                 <div className="flex items-start justify-between gap-4">
                   <span className="p-2.5 bg-[#FFA42C]/10 text-[#FFA42C] rounded-xl inline-block shadow-inner leading-none">
                     <BookOpen className="w-5 h-5" />

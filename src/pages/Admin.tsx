@@ -49,6 +49,7 @@ export default function Admin() {
     priceDetail: '',
     description: '',
     syllabus: '',
+    imagen_url: '',
     maxPeople: 10,
     orden: 1,
     activo: true
@@ -304,6 +305,7 @@ export default function Admin() {
       priceDetail: '',
       description: '',
       syllabus: '',
+      imagen_url: '',
       maxPeople: 10,
       orden: courses.length + 1,
       activo: true
@@ -321,6 +323,7 @@ export default function Admin() {
       priceDetail: c.priceDetail,
       description: c.description,
       syllabus: (c.syllabus || []).join('\n'),
+      imagen_url: c.imagen_url || '',
       maxPeople: c.maxPeople,
       orden: c.orden,
       activo: c.activo
@@ -1460,6 +1463,13 @@ export default function Admin() {
                     />
                   </div>
 
+                  <ImageUploadField
+                    label="Foto del curso (opcional)"
+                    value={courseForm.imagen_url}
+                    onChange={(url) => setCourseForm({ ...courseForm, imagen_url: url })}
+                    required={false}
+                  />
+
                   <div className="space-y-1">
                     <label className="block text-xs font-bold text-stone-700 font-mono uppercase">Temario (un ítem por línea)</label>
                     <textarea
@@ -1527,6 +1537,13 @@ export default function Admin() {
                   <div className="divide-y divide-stone-150">
                     {courses.map((c) => (
                       <div key={c.id} className="p-4 flex items-center gap-4 hover:bg-stone-50/50">
+                        <div className="w-24 h-16 rounded-lg overflow-hidden bg-stone-100 flex-shrink-0 flex items-center justify-center">
+                          {c.imagen_url ? (
+                            <img src={c.imagen_url} alt={c.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          ) : (
+                            <GraduationCap className="w-6 h-6 text-stone-300" />
+                          )}
+                        </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-bold text-sm text-stone-900 truncate">{c.title}</p>
                           <p className="text-[10px] text-stone-500 font-mono truncate">{c.level} • {c.duration} • {c.price}</p>

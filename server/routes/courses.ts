@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { dbService } from '../db';
 import { authenticateToken, requireRole } from '../middleware/auth';
 import { courseValidation, handleValidationErrors } from '../middleware/validate';
+import { deleteUploadedFile } from '../lib/uploads';
 
 const router = Router();
 
@@ -38,7 +39,7 @@ router.get('/:slug', async (req, res) => {
 
 router.post('/', authenticateToken, requireRole('admin', 'editor'), courseValidation, handleValidationErrors, async (req, res) => {
   try {
-    const { title, duration, level, price, priceDetail, description, syllabus, maxPeople, orden, activo } = req.body;
+    const { title, duration, level, price, priceDetail, description, syllabus, imagen_url, maxPeople, orden, activo } = req.body;
     await dbService.saveCourse({
       title,
       duration,
@@ -47,6 +48,7 @@ router.post('/', authenticateToken, requireRole('admin', 'editor'), courseValida
       priceDetail: priceDetail || '',
       description,
       syllabus,
+      imagen_url: imagen_url || undefined,
       maxPeople: maxPeople ?? 10,
       orden: orden ?? 1,
       activo: activo !== undefined ? activo : true,
@@ -59,7 +61,8 @@ router.post('/', authenticateToken, requireRole('admin', 'editor'), courseValida
 
 router.put('/:id', authenticateToken, requireRole('admin', 'editor'), courseValidation, handleValidationErrors, async (req, res) => {
   try {
-    const { title, duration, level, price, priceDetail, description, syllabus, maxPeople, orden, activo } = req.body;
+    const { title, duration, level, price, priceDetail, description, syllabus, imagen_url, maxPeople, orden, activo } = req.body;
+    const previous = await dbService.getCourseById(req.params.id);
     await dbService.saveCourse({
       id: req.params.id,
       title,
@@ -69,10 +72,14 @@ router.put('/:id', authenticateToken, requireRole('admin', 'editor'), courseVali
       priceDetail: priceDetail || '',
       description,
       syllabus,
+      imagen_url: imagen_url || undefined,
       maxPeople: maxPeople ?? 10,
       orden: orden ?? 1,
       activo: activo !== undefined ? activo : true,
     });
+    if (previous && previous.imagen_url !== imagen_url) {
+      await deleteUploadedFile(previous.imagen_url);
+    }
     return res.json({ success: true, message: 'Curso actualizado exitosamente.' });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
@@ -81,7 +88,9 @@ router.put('/:id', authenticateToken, requireRole('admin', 'editor'), courseVali
 
 router.delete('/:id', authenticateToken, requireRole('admin', 'editor'), async (req, res) => {
   try {
+    const existing = await dbService.getCourseById(req.params.id);
     await dbService.deleteCourse(req.params.id);
+    if (existing) await deleteUploadedFile(existing.imagen_url);
     return res.json({ success: true, message: 'Curso eliminado.' });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });

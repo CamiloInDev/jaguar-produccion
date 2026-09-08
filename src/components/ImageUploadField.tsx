@@ -7,9 +7,10 @@ interface ImageUploadFieldProps {
   value: string;
   onChange: (url: string) => void;
   placeholder?: string;
+  required?: boolean;
 }
 
-export default function ImageUploadField({ label, value, onChange, placeholder }: ImageUploadFieldProps) {
+export default function ImageUploadField({ label, value, onChange, placeholder, required = true }: ImageUploadFieldProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +37,7 @@ export default function ImageUploadField({ label, value, onChange, placeholder }
       <div className="flex gap-2">
         <input
           type="text"
-          required
+          required={required}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder || 'https://... o /images/...'}

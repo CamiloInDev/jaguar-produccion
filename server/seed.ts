@@ -132,6 +132,7 @@ async function seedCatalog(): Promise<void> {
       priceDetail: c.priceDetail || '',
       description: c.description,
       syllabus: JSON.stringify(c.syllabus || []),
+      imagen_url: c.imagen_url || null,
       maxPeople: c.maxPeople ?? 10,
       orden: c.orden ?? 1,
       activo: c.activo !== false ? 1 : 0,

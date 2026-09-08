@@ -116,6 +116,7 @@ function rowToCourse(r: RowDataPacket): Course {
     priceDetail: r.priceDetail,
     description: r.description,
     syllabus: parseJson<string[]>(r.syllabus, []),
+    imagen_url: r.imagen_url ?? undefined,
     maxPeople: Number(r.maxPeople),
     orden: Number(r.orden),
     activo: toBool(r.activo),
@@ -464,15 +465,20 @@ export const dbService = {
     return rows.length ? rowToCourse(rows[0]) : null;
   },
 
+  async getCourseById(id: string): Promise<Course | null> {
+    const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM courses WHERE id = ? LIMIT 1', [id]);
+    return rows.length ? rowToCourse(rows[0]) : null;
+  },
+
   async saveCourse(course: Omit<Course, 'id' | 'slug' | 'created_at'> & { id?: string; slug?: string }): Promise<void> {
     const slug = course.slug || slugify(course.title);
     const syllabus = JSON.stringify(course.syllabus || []);
     if (course.id) {
       await pool.query(
         `UPDATE courses SET slug = ?, title = ?, duration = ?, level = ?, price = ?, priceDetail = ?,
-         description = ?, syllabus = ?, maxPeople = ?, orden = ?, activo = ? WHERE id = ?`,
+         description = ?, syllabus = ?, imagen_url = ?, maxPeople = ?, orden = ?, activo = ? WHERE id = ?`,
         [slug, course.title, course.duration, course.level, course.price, course.priceDetail || '',
-         course.description, syllabus, course.maxPeople ?? 10, course.orden ?? 1,
+         course.description, syllabus, course.imagen_url || null, course.maxPeople ?? 10, course.orden ?? 1,
          course.activo !== undefined ? (course.activo ? 1 : 0) : 1, course.id]
       );
     } else {
@@ -486,6 +492,7 @@ export const dbService = {
         priceDetail: course.priceDetail || '',
         description: course.description,
         syllabus,
+        imagen_url: course.imagen_url || null,
         maxPeople: course.maxPeople ?? 10,
         orden: course.orden ?? 1,
         activo: course.activo !== undefined ? (course.activo ? 1 : 0) : 1,

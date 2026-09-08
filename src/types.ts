@@ -81,6 +81,7 @@ export interface Course {
   priceDetail: string;
   description: string;
   syllabus: string[];
+  imagen_url?: string;
   maxPeople: number;
   orden: number;
   activo: boolean;

@@ -29,6 +29,9 @@
 --
 -- Luego crea la tabla `courses` nueva corriendo el CREATE TABLE de más abajo
 -- (o reimportando este archivo completo — todos los CREATE usan IF NOT EXISTS).
+--
+-- Si `courses` ya existe pero sin la columna `imagen_url` (agregada después):
+--   ALTER TABLE courses ADD COLUMN imagen_url TEXT NULL AFTER syllabus;
 -- ============================================================================
 
 SET NAMES utf8mb4;
@@ -126,6 +129,7 @@ CREATE TABLE IF NOT EXISTS courses (
   priceDetail  VARCHAR(255) NOT NULL DEFAULT '',
   description  TEXT         NOT NULL,
   syllabus     JSON         NOT NULL,
+  imagen_url   TEXT         NULL,
   maxPeople    INT          NOT NULL DEFAULT 10,
   orden        INT          NOT NULL DEFAULT 1,
   activo       TINYINT(1)   NOT NULL DEFAULT 1,

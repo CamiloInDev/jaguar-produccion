@@ -92,6 +92,28 @@ describe('POST /api/cursos - Admin', () => {
       .send({ title: 'Incomplete' });
     expect(res.status).toBe(400);
   });
+
+  it('creates a course without an image (optional field)', async () => {
+    const cookies = await getAdminCookies();
+    const res = await request(app)
+      .post('/api/cursos')
+      .set('Cookie', cookies)
+      .send({ ...validCoursePayload, title: 'Course Without Image' });
+    expect(res.status).toBe(201);
+  });
+
+  it('accepts a course with a local uploaded image path', async () => {
+    const cookies = await getAdminCookies();
+    const res = await request(app)
+      .post('/api/cursos')
+      .set('Cookie', cookies)
+      .send({ ...validCoursePayload, title: 'Course With Image', imagen_url: '/uploads/img_test.webp' });
+    expect(res.status).toBe(201);
+
+    const all = await request(app).get('/api/cursos/all').set('Cookie', cookies);
+    const course = all.body.find((c: any) => c.title === 'Course With Image');
+    expect(course.imagen_url).toBe('/uploads/img_test.webp');
+  });
 });
 
 describe('GET /api/cursos/all - Admin', () => {
