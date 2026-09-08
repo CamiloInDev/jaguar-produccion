@@ -429,6 +429,7 @@ npm run test:e2e       # end-to-end, con el server corriendo aparte
 | Cambié una variable `VITE_*` y no se ve el cambio | Esas variables se incrustan en **build time**, no runtime | `npm run build` de nuevo y Restart |
 | El correo de "recuperar contraseña" nunca llega | `SMTP_*` no configurado o incorrecto | Revisa el log del server — si no hay SMTP configurado, imprime el correo simulado ahí en vez de enviarlo; confirma credenciales de la cuenta de correo en hPanel |
 | La burbuja del asistente (chat) no carga o queda en blanco | El dominio del webhook de n8n no está en la CSP, o el workflow de n8n está caído/pausado | Revisa la consola del navegador por errores de CSP; confirma que el workflow esté activo en n8n (`curl` a la URL del webhook debe devolver `200`) |
+| El widget de Wompi da `403 (CloudFront) Request blocked` al abrir | Wompi/CloudFront bloquea el tráfico de esa IP o red (frecuente en redes corporativas/VPN, o tráfico automatizado) | Prueba desde otra red/dispositivo; si persiste, contacta soporte de Wompi con la IP pública desde la que pruebas. No es un bug de la integración — la firma e integridad ya están verificadas correctas |
 
 ---
 

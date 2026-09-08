@@ -1,8 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useCartStore, useAuthStore } from '../store';
-import { CreditCard, MapPin, ClipboardList, ShieldCheck, ArrowLeft, CheckCircle2, Phone, Sparkles } from 'lucide-react';
+import { CreditCard, MapPin, ClipboardList, ArrowLeft, Phone } from 'lucide-react';
 import axios from 'axios';
+
+declare global {
+  interface Window {
+    WidgetCheckout?: new (options: Record<string, unknown>) => { open: (callback: (result: any) => void) => void };
+  }
+}
 
 export default function CheckoutPage() {
   const navigate = useNavigate();
@@ -17,14 +23,7 @@ export default function CheckoutPage() {
   });
   const [notas, setNotas] = useState('');
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
-  const [wompiOpen, setWompiOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  
-  // Wompi Modal State Simulators
-  const [paymentMethod, setPaymentMethod] = useState<'card' | 'pse' | 'nequi'>('card');
-  const [cardNumber, setCardNumber] = useState('4000 1234 5678 9010');
-  const [cardHolder, setCardHolder] = useState(user ? `${user.nombre} ${user.apellido}` : 'Mateo Gomez');
-  const [pseBank, setPseBank] = useState('Bancolombia');
 
   // Colombian departments and cities
   const departamentos = [
@@ -42,7 +41,7 @@ export default function CheckoutPage() {
     );
   }
 
-  const handleOpenWompi = (e: React.FormEvent) => {
+  const handleOpenWompi = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!address.direccion || !address.telefono) {
       alert('Por favor diligencie su dirección de envío y teléfono de contacto.');
@@ -52,17 +51,20 @@ export default function CheckoutPage() {
       alert('Debes aceptar la Política de Tratamiento de Datos Personales para continuar con el pago.');
       return;
     }
-    setWompiOpen(true);
-  };
+    if (!window.WidgetCheckout) {
+      alert('No se pudo cargar la pasarela de pagos de Wompi. Verifica tu conexión e intenta de nuevo.');
+      return;
+    }
 
-  const handleSimulatePaymentSuccess = async () => {
     setLoading(true);
     try {
-      // 1. Prepare payment details from Backend to secure signatures
+      // 1. Pide al backend la referencia + firma de integridad (nunca se calcula en el cliente)
       const prepRes = await axios.post('/api/ordenes/preparar-pago', { total });
-      const { reference, signature } = prepRes.data;
+      const { reference, signature, amount, currency, publicKey } = prepRes.data;
 
-      // 2. Submit order context as 'pendiente'
+      // 2. Crea la orden como 'pendiente' ANTES de abrir el widget: algunos medios de pago
+      // (PSE, transferencias) redirigen el navegador directo a redirectUrl sin pasar por el
+      // callback de abajo, así que la orden debe existir de antemano para esa ruta también.
       const checkoutItems = items.map(item => ({
         product_id: item.product_id,
         nombre: item.product?.nombre || 'Producto',
@@ -72,29 +74,49 @@ export default function CheckoutPage() {
 
       await axios.post('/api/ordenes/checkout', {
         reference,
-        wompiTransactionId: `TX-WMP-${Date.now().toString(36).toUpperCase()}`,
         items: checkoutItems,
         total,
         direccion_envio: address,
         notas
       });
 
-      // 3. Fire Sandbox Webhook to trigger instant approval State Transitions!
-      await axios.post('/api/webhooks/wompi-test-trigger', {
-        transactionId: `TX-WMP-${Date.now().toString(36).toUpperCase()}`,
+      // 3. Abre el Widget real de Wompi — el estado final de la orden ('pagado') lo
+      // confirma el webhook server-to-server (/api/ordenes/wompi-webhook), nunca este callback.
+      const checkout = new window.WidgetCheckout({
+        currency,
+        amountInCents: amount,
         reference,
-        status: 'APPROVED'
+        publicKey,
+        signature: { integrity: signature },
+        redirectUrl: `${window.location.origin}/checkout/confirmacion?ref=${reference}`,
+        customerData: {
+          email: user?.email,
+          fullName: user ? `${user.nombre} ${user.apellido}` : undefined,
+          phoneNumber: address.telefono,
+          phoneNumberPrefix: '+57',
+        },
+        shippingAddress: {
+          addressLine1: address.direccion,
+          city: address.ciudad,
+          region: address.departamento,
+          country: 'CO',
+          phoneNumber: address.telefono,
+        },
       });
 
-      // Clean global cart state, close simulator, redirect
       clearCart();
-      setWompiOpen(false);
-      navigate(`/checkout/confirmacion?ref=${reference}`);
+      checkout.open((result: any) => {
+        setLoading(false);
+        if (result?.transaction) {
+          navigate(`/checkout/confirmacion?ref=${reference}`);
+        }
+        // Si el cliente cierra el widget sin completar el pago, la orden queda 'pendiente'
+        // y puede retomarla o contactarnos con la referencia.
+      });
     } catch (err: any) {
-      console.error(err);
-      alert('Error en pasarela de pagos simulada: ' + (err.response?.data?.error || err.message));
-    } finally {
       setLoading(false);
+      console.error(err);
+      alert('Error iniciando el pago con Wompi: ' + (err.response?.data?.error || err.message));
     }
   };
 
@@ -205,10 +227,15 @@ export default function CheckoutPage() {
 
           <button
             type="submit"
-            className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#122C9B] border border-[#122C9B] hover:bg-[#FFA42C] text-white text-sm font-bold rounded-lg cursor-pointer"
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#122C9B] border border-[#122C9B] hover:bg-[#FFA42C] text-white text-sm font-bold rounded-lg cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <CreditCard className="w-4 h-4" />
-            <span>Validar Orden & Pagar con WooMPI</span>
+            {loading ? (
+              <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <CreditCard className="w-4 h-4" />
+            )}
+            <span>{loading ? 'Abriendo pasarela de pago...' : 'Pagar con Wompi'}</span>
           </button>
         </form>
 
@@ -258,169 +285,6 @@ export default function CheckoutPage() {
         </div>
 
       </div>
-
-      {/* ---------------------------------------------------------------------------- */}
-      {/* HIGH FIDELITY WOOMPI MODAL CHECKOUT SANDBOX SIMULATOR */}
-      {/* ---------------------------------------------------------------------------- */}
-      {wompiOpen && (
-        <div className="fixed inset-0 bg-[#1C1917]/85 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-white border-2 border-stone-200 max-w-md w-full rounded-2xl overflow-hidden shadow-2xl flex flex-col justify-between relative animate-scaleUp">
-            
-            {/* Header branding */}
-            <div className="bg-[#122C9B] text-white p-5 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 bg-[#FFA42C] text-white text-[9px] font-extrabold font-mono rounded">
-                  SANDBOX
-                </span>
-                <span className="font-display text-lg font-extrabold tracking-tight">Pasarela WooMPI</span>
-              </div>
-              <button
-                onClick={() => setWompiOpen(false)}
-                className="text-stone-400 hover:text-white text-xs font-mono font-bold px-2 py-1 bg-white/5 border border-white/10 rounded cursor-pointer"
-              >
-                Cerrar
-              </button>
-            </div>
-
-            {/* Simulated content body */}
-            <div className="p-6 space-y-6">
-              <div className="flex justify-between items-center bg-amber-50 p-3 rounded-xl border border-amber-100">
-                <span className="text-xs font-mono text-amber-900">Total Transacción</span>
-                <span className="text-base font-black text-amber-950 font-sans">
-                  ${total.toLocaleString('es-CO')} COP
-                </span>
-              </div>
-
-              {/* Selector methods */}
-              <div className="space-y-2">
-                <h4 className="text-[10px] font-bold font-mono uppercase text-stone-400">Elegir Medio de Pago</h4>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod('card')}
-                    className={`py-2 px-1 text-center font-bold text-xs rounded-lg border transition-all cursor-pointer ${
-                      paymentMethod === 'card'
-                        ? 'bg-[#122C9B] text-white border-[#122C9B]'
-                        : 'bg-white text-stone-600 border-stone-200 hover:border-[#3D5FC9]'
-                    }`}
-                  >
-                    💳 Tarjeta
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod('pse')}
-                    className={`py-2 px-1 text-center font-bold text-xs rounded-lg border transition-all cursor-pointer ${
-                      paymentMethod === 'pse'
-                        ? 'bg-[#122C9B] text-white border-[#122C9B]'
-                        : 'bg-white text-stone-600 border-stone-200 hover:border-[#3D5FC9]'
-                    }`}
-                  >
-                    🏦 PSE (PSE)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod('nequi')}
-                    className={`py-2 px-1 text-center font-bold text-xs rounded-lg border transition-all cursor-pointer ${
-                      paymentMethod === 'nequi'
-                        ? 'bg-[#122C9B] text-white border-[#122C9B]'
-                        : 'bg-white text-stone-600 border-stone-200 hover:border-[#3D5FC9]'
-                    }`}
-                  >
-                    📱 Nequi
-                  </button>
-                </div>
-              </div>
-
-              {/* Subview of fields based on chosen method */}
-              {paymentMethod === 'card' && (
-                <div className="space-y-4 animate-fadeIn">
-                  <div className="space-y-1">
-                    <label className="block text-[10px] font-bold font-mono text-stone-500 uppercase">Número de Tarjeta (Pruebas)</label>
-                    <input
-                      type="text"
-                      value={cardNumber}
-                      onChange={(e) => setCardNumber(e.target.value)}
-                      className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label className="block text-[10px] font-bold font-mono text-stone-500 uppercase">Vencimiento</label>
-                      <input type="text" placeholder="12/28" className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs" />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="block text-[10px] font-bold font-mono text-stone-500 uppercase">CVV</label>
-                      <input type="text" placeholder="123" className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs" />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {paymentMethod === 'pse' && (
-                <div className="space-y-3 animate-fadeIn">
-                  <div className="space-y-1">
-                    <label className="block text-[10px] font-bold font-mono text-stone-500 uppercase">Acreditador Bancario</label>
-                    <select
-                      value={pseBank}
-                      onChange={(e) => setPseBank(e.target.value)}
-                      className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs"
-                    >
-                      <option value="Bancolombia">Bancolombia Ahorros</option>
-                      <option value="Davivienda">Davivienda S.A.</option>
-                      <option value="Banco de Bogota">Banco de Bogotá</option>
-                      <option value="BBVA">BBVA Colombia</option>
-                    </select>
-                  </div>
-                  <p className="text-[10px] text-stone-400 font-light font-mono leading-normal">
-                    *Será redirigido al portal oficial PSE del banco correspondiente en ambiente Sandbox.
-                  </p>
-                </div>
-              )}
-
-              {paymentMethod === 'nequi' && (
-                <div className="space-y-3 animate-fadeIn">
-                  <div className="space-y-1">
-                    <label className="block text-[10px] font-bold font-mono text-stone-500 uppercase">Número Cuenta Celular</label>
-                    <input
-                      type="text"
-                      defaultValue={address.telefono}
-                      className="w-full px-4 py-2 bg-stone-50 border border-stone-300 rounded-lg text-xs"
-                    />
-                  </div>
-                  <p className="text-[10px] text-stone-400 font-light font-mono leading-normal">
-                    *Recibirá una notificación push instantánea de aprobación dentro de su aplicación móvil Nequi.
-                  </p>
-                </div>
-              )}
-
-            </div>
-
-            {/* Trigger simulator operations button */}
-            <div className="p-6 bg-stone-50 border-t border-stone-200 space-y-3">
-              <button
-                onClick={handleSimulatePaymentSuccess}
-                disabled={loading}
-                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-[#FAF8F5] text-sm font-bold rounded-xl flex items-center justify-center gap-2 cursor-pointer"
-              >
-                {loading ? (
-                  <span className="w-5 h-5 border-2 border-[#FAF8F5] border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Confirmar Pago de Especialidad</span>
-                  </>
-                )}
-              </button>
-
-              <div className="flex justify-center items-center gap-1.5 text-[10px] text-[#122C9B] font-medium p-2 bg-[#FFA42C]/10 border border-[#FFA42C]/20 rounded-xl">
-                <Sparkles className="w-3.5 h-3.5 text-[#FFA42C] font-bold" />
-                <span>Modo Prueba Activo: No se debitará dinero real.</span>
-              </div>
-            </div>
-
-          </div>
-        </div>
-      )}
 
     </div>
   );
