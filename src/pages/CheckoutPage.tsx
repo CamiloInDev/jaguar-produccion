@@ -4,16 +4,10 @@ import { useCartStore, useAuthStore } from '../store';
 import { CreditCard, MapPin, ClipboardList, ArrowLeft, Phone } from 'lucide-react';
 import axios from 'axios';
 
-declare global {
-  interface Window {
-    WidgetCheckout?: new (options: Record<string, unknown>) => { open: (callback: (result: any) => void) => void };
-  }
-}
-
 export default function CheckoutPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const { items, total, clearCart } = useCartStore();
+  const { items, total } = useCartStore();
 
   const [address, setAddress] = useState({
     direccion: '',
@@ -41,7 +35,7 @@ export default function CheckoutPage() {
     );
   }
 
-  const handleOpenWompi = async (e: React.FormEvent) => {
+  const handlePay = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!address.direccion || !address.telefono) {
       alert('Por favor diligencie su dirección de envío y teléfono de contacto.');
@@ -49,10 +43,6 @@ export default function CheckoutPage() {
     }
     if (!privacyAccepted) {
       alert('Debes aceptar la Política de Tratamiento de Datos Personales para continuar con el pago.');
-      return;
-    }
-    if (!window.WidgetCheckout) {
-      alert('No se pudo cargar la pasarela de pagos de Wompi. Verifica tu conexión e intenta de nuevo.');
       return;
     }
 
@@ -66,58 +56,22 @@ export default function CheckoutPage() {
         cantidad: item.cantidad,
       }));
 
-      // 1. Pide al backend la referencia + firma de integridad (el monto lo calcula el
-      // backend con el precio real de cada producto, nunca se calcula en el cliente)
-      const prepRes = await axios.post('/api/ordenes/preparar-pago', { items: checkoutItems });
-      const { reference, signature, amount, currency, publicKey } = prepRes.data;
-
-      // 2. Crea la orden como 'pendiente' ANTES de abrir el widget: algunos medios de pago
-      // (PSE, transferencias) redirigen el navegador directo a redirectUrl sin pasar por el
-      // callback de abajo, así que la orden debe existir de antemano para esa ruta también.
-      await axios.post('/api/ordenes/checkout', {
-        reference,
+      // El backend crea la orden 'pendiente' y la preferencia de Checkout Pro en un solo paso.
+      // El estado final ('pagado') lo confirma el servidor consultando el pago a Mercado Pago
+      // (webhook o verificación al volver), nunca este navegador.
+      const res = await axios.post('/api/ordenes/crear-pago', {
         items: checkoutItems,
         direccion_envio: address,
-        notas
+        notas,
       });
 
-      // 3. Abre el Widget real de Wompi — el estado final de la orden ('pagado') lo
-      // confirma el webhook server-to-server (/api/ordenes/wompi-webhook), nunca este callback.
-      const checkout = new window.WidgetCheckout({
-        currency,
-        amountInCents: amount,
-        reference,
-        publicKey,
-        signature: { integrity: signature },
-        redirectUrl: `${window.location.origin}/checkout/confirmacion?ref=${reference}`,
-        customerData: {
-          email: user?.email,
-          fullName: user ? `${user.nombre} ${user.apellido}` : undefined,
-          phoneNumber: address.telefono,
-          phoneNumberPrefix: '+57',
-        },
-        shippingAddress: {
-          addressLine1: address.direccion,
-          city: address.ciudad,
-          region: address.departamento,
-          country: 'CO',
-          phoneNumber: address.telefono,
-        },
-      });
-
-      clearCart();
-      checkout.open((result: any) => {
-        setLoading(false);
-        if (result?.transaction) {
-          navigate(`/checkout/confirmacion?ref=${reference}`);
-        }
-        // Si el cliente cierra el widget sin completar el pago, la orden queda 'pendiente'
-        // y puede retomarla o contactarnos con la referencia.
-      });
+      // El carrito NO se vacía aquí: si el comprador abandona el checkout de Mercado Pago lo
+      // perdería. Se vacía en la página de confirmación, cuando la orden ya existe.
+      window.location.href = res.data.init_point;
     } catch (err: any) {
       setLoading(false);
       console.error(err);
-      alert('Error iniciando el pago con Wompi: ' + (err.response?.data?.error || err.message));
+      alert('Error iniciando el pago con Mercado Pago: ' + (err.response?.data?.error || err.message));
     }
   };
 
@@ -138,7 +92,7 @@ export default function CheckoutPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
         
         {/* Left Hand: Delivery Address Formulation (7 Columns) */}
-        <form onSubmit={handleOpenWompi} className="lg:col-span-7 bg-white border border-stone-200 rounded-3xl p-8 shadow-sm space-y-6">
+        <form onSubmit={handlePay} className="lg:col-span-7 bg-white border border-stone-200 rounded-3xl p-8 shadow-sm space-y-6">
           <h2 className="font-display text-2xl font-bold text-stone-900 border-b border-stone-100 pb-3 flex items-center gap-2.5">
             <MapPin className="w-6 h-6 text-[#FFA42C]" />
             <span>Detalles del Despacho</span>
@@ -236,7 +190,7 @@ export default function CheckoutPage() {
             ) : (
               <CreditCard className="w-4 h-4" />
             )}
-            <span>{loading ? 'Abriendo pasarela de pago...' : 'Pagar con Wompi'}</span>
+            <span>{loading ? 'Redirigiendo a Mercado Pago...' : 'Pagar con Mercado Pago'}</span>
           </button>
         </form>
 

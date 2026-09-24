@@ -13,10 +13,21 @@ const envSchema = z.object({
   // Security
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
 
-  // Wompi payment gateway
-  WOMPI_INTEGRITY_KEY: z.string().min(1, 'WOMPI_INTEGRITY_KEY is required'),
-  WOMPI_EVENTS_KEY: z.string().min(1, 'WOMPI_EVENTS_KEY is required'),
-  VITE_WOMPI_PUBLIC_KEY: z.string().min(1, 'VITE_WOMPI_PUBLIC_KEY is required'),
+  // Mercado Pago (Checkout Pro, variante Preferences API)
+  // Ojo: el Access Token de PRUEBA de Checkout Pro también empieza con APP_USR-,
+  // así que no se distingue de producción por el prefijo — cada ambiente tiene el suyo.
+  MP_ACCESS_TOKEN: z.string().min(1, 'MP_ACCESS_TOKEN is required'),
+  // Clave secreta de "Tus integraciones > Webhooks" (firma x-signature). No es el Access Token.
+  MP_WEBHOOK_SECRET: z.string().min(1, 'MP_WEBHOOK_SECRET is required'),
+  // Texto en el extracto de la tarjeta del comprador (máx. 13 caracteres según Mercado Pago)
+  MP_STATEMENT_DESCRIPTOR: z.string().min(1).max(13).default('JAGUARCOFFEE'),
+  // Decisiones de producto, opcionales — sin definir se usa el comportamiento por defecto de MP:
+  // tipos de pago a excluir separados por coma (ej. "ticket" quita Efecty; "bank_transfer" quita PSE)
+  MP_EXCLUDED_PAYMENT_TYPES: z.string().optional(),
+  // tope de cuotas con tarjeta de crédito (1–36)
+  MP_MAX_INSTALLMENTS: z.coerce.number().int().min(1).max(36).optional(),
+  // minutos que el link de pago sigue siendo válido después de crearlo
+  MP_PREFERENCE_EXPIRATION_MINUTES: z.coerce.number().int().min(5).optional(),
 
   // Application
   APP_URL: z.string().url().default('http://localhost:3000'),

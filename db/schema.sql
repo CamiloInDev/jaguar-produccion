@@ -145,11 +145,13 @@ CREATE TABLE IF NOT EXISTS orders (
   user_id              VARCHAR(64) NOT NULL,
   estado               ENUM('pendiente','pagado','enviado','entregado','cancelado') NOT NULL DEFAULT 'pendiente',
   total                INT         NOT NULL,
-  wompi_transaction_id VARCHAR(120) NULL,
+  payment_id           VARCHAR(120) NULL,   -- id del pago en Mercado Pago (último aplicado)
+  preference_id        VARCHAR(120) NULL,   -- id de la preferencia de Checkout Pro
   direccion_envio      JSON        NOT NULL,
   notas                TEXT        NULL,
   created_at           VARCHAR(32) NOT NULL,
-  INDEX idx_orders_user (user_id)
+  INDEX idx_orders_user (user_id),
+  INDEX idx_orders_payment (payment_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS order_items (

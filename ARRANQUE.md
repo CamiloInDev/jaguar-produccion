@@ -44,12 +44,12 @@ ADMIN_PASSWORD="cambia_esto_123"
 ADMIN_NOMBRE="Administrador"
 ADMIN_APELLIDO="Jaguar"
 
-# Wompi — placeholders mientras NO haya credenciales reales (solo para que arranque)
-WOMPI_INTEGRITY_KEY="sandbox_placeholder_key"
-VITE_WOMPI_PUBLIC_KEY="pub_test_placeholder"
+# Mercado Pago — placeholders mientras NO haya credenciales reales (solo para que arranque)
+MP_ACCESS_TOKEN="APP_USR-placeholder"
+MP_WEBHOOK_SECRET="placeholder_webhook_secret"
 ```
 
-> ⚠️ **Wompi:** el servidor valida las variables al arrancar y **no levanta** si `WOMPI_INTEGRITY_KEY` o `VITE_WOMPI_PUBLIC_KEY` están vacías. Con los placeholders de arriba corre todo; solo el **pago real** queda pendiente hasta tener las credenciales del cliente.
+> ⚠️ **Mercado Pago:** el servidor valida las variables al arrancar y **no levanta** si `MP_ACCESS_TOKEN` o `MP_WEBHOOK_SECRET` están vacías. Con los placeholders de arriba corre todo; solo el **pago real** queda pendiente hasta tener las credenciales de prueba de la app en *Tus integraciones*. Probar el checkout completo requiere una URL HTTPS pública (Mercado Pago no acepta `localhost`): ver README-DEPLOY.md §12.
 
 ## 3. Crear la base de datos e importar el esquema
 
@@ -95,4 +95,4 @@ curl http://localhost:3000/api/productos    # -> 26 productos (JSON)
 
 - El `.env` **nunca** se sube al repo.
 - Runtime con MySQL **verificado**: build de producción (`npm run build`) + seed + `node dist/server.cjs` probado contra una BD MySQL real (health check, catálogo, login y creación de orden respondiendo correctamente).
-- Pendientes del proyecto: ver **[README-DEPLOY.md](README-DEPLOY.md) §12** (Wompi producción, panel de usuarios, backups).
+- Pendientes del proyecto: ver **[README-DEPLOY.md](README-DEPLOY.md) §12** (Mercado Pago producción, panel de usuarios, backups).

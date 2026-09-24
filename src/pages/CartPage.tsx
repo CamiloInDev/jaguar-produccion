@@ -170,7 +170,7 @@ export default function CartPage() {
             onClick={handleCheckoutRedirect}
             className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#122C9B] border border-[#122C9B] hover:bg-[#FFA42C] text-white text-sm font-bold rounded-xl transition-all shadow-md cursor-pointer"
           >
-            <span>Proceder al pago con WooMPI</span>
+            <span>Proceder al pago</span>
             <ArrowRight className="w-4 h-4" />
           </button>
 
@@ -180,7 +180,7 @@ export default function CartPage() {
               <span>Checkout 100% Protegido</span>
             </div>
             <p className="font-light">
-              Procesado por WooMPI Popup Widget (Tarjetas de crédito o Nequi, PSE, Bancolombia).
+              Pago procesado por Mercado Pago: tarjetas de crédito y débito, PSE y otros medios.
             </p>
           </div>
         </div>

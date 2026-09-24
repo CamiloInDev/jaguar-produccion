@@ -162,7 +162,7 @@ export default function ProductDetail() {
               <ShieldCheck className="w-5 h-5 text-[#FFA42C]" />
               <div>
                 <h4 className="text-xs font-bold text-stone-900">Pago Garantizado</h4>
-                <p className="text-[10px] text-stone-400 font-light mt-0.5">WooMPI Checkout cifrado</p>
+                <p className="text-[10px] text-stone-400 font-light mt-0.5">Checkout seguro con Mercado Pago</p>
               </div>
             </div>
           </div>

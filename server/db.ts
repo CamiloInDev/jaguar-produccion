@@ -177,7 +177,8 @@ function rowToOrder(r: RowDataPacket, items: OrderItem[]): Order {
     user_email: r.user_email ?? undefined,
     estado: r.estado,
     total: Number(r.total),
-    wompi_transaction_id: r.wompi_transaction_id ?? undefined,
+    payment_id: r.payment_id ?? undefined,
+    preference_id: r.preference_id ?? undefined,
     direccion_envio: parseJson(r.direccion_envio, {
       direccion: '', ciudad: '', departamento: '', telefono: ''
     }),
@@ -573,9 +574,9 @@ export const dbService = {
     try {
       await conn.beginTransaction();
       await conn.query(
-        `INSERT INTO orders (id, user_id, estado, total, wompi_transaction_id, direccion_envio, notas, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [id, order.user_id, estado, order.total, order.wompi_transaction_id ?? null,
+        `INSERT INTO orders (id, user_id, estado, total, payment_id, preference_id, direccion_envio, notas, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, order.user_id, estado, order.total, order.payment_id ?? null, order.preference_id ?? null,
          JSON.stringify(order.direccion_envio), order.notas ?? null, created_at]
       );
       for (const item of order.items) {
@@ -602,7 +603,8 @@ export const dbService = {
       user_id: order.user_id,
       estado,
       total: order.total,
-      wompi_transaction_id: order.wompi_transaction_id,
+      payment_id: order.payment_id,
+      preference_id: order.preference_id,
       direccion_envio: order.direccion_envio,
       notas: order.notas,
       items: order.items,
@@ -638,6 +640,65 @@ export const dbService = {
       conn.release();
     }
     return this.getOrderById(id);
+  },
+
+  async setOrderPreference(id: string, preferenceId: string): Promise<void> {
+    await pool.query('UPDATE orders SET preference_id = ? WHERE id = ?', [preferenceId, id]);
+  },
+
+  /**
+   * Aplica el resultado de un pago de la pasarela a una orden, de forma atómica.
+   *
+   * `decide` recibe la orden bloqueada (SELECT ... FOR UPDATE) y devuelve el estado nuevo
+   * (o null si no corresponde cambiarlo) y si se debe guardar este payment_id en la orden.
+   * Decidir DENTRO del lock evita que el webhook y la verificación al volver del checkout
+   * (que pueden llegar a la vez) descuenten stock dos veces: el segundo en entrar ya ve la
+   * orden en 'pagado' y no hace nada.
+   */
+  async applyOrderPayment(
+    id: string,
+    paymentId: string,
+    decide: (current: { estado: OrderStatus; total: number }) => { next: OrderStatus | null; recordPayment: boolean }
+  ): Promise<{ order: Order; previous: OrderStatus; changed: boolean } | null> {
+    const conn = await pool.getConnection();
+    let previous: OrderStatus;
+    let next: OrderStatus | null;
+    try {
+      await conn.beginTransaction();
+      const [rows] = await conn.query<RowDataPacket[]>(
+        'SELECT estado, total FROM orders WHERE id = ? LIMIT 1 FOR UPDATE', [id]
+      );
+      if (rows.length === 0) {
+        await conn.rollback();
+        return null;
+      }
+      previous = rows[0].estado as OrderStatus;
+      const decision = decide({ estado: previous, total: Number(rows[0].total) });
+      next = decision.next === previous ? null : decision.next;
+
+      if (next) {
+        await conn.query('UPDATE orders SET estado = ? WHERE id = ?', [next, id]);
+      }
+      if (decision.recordPayment) {
+        await conn.query('UPDATE orders SET payment_id = ? WHERE id = ?', [paymentId, id]);
+      }
+      if (next === 'pagado') {
+        const [itemRows] = await conn.query<RowDataPacket[]>(
+          'SELECT product_id, cantidad FROM order_items WHERE order_id = ?', [id]
+        );
+        for (const item of itemRows) {
+          await conn.query('UPDATE products SET stock = GREATEST(0, stock - ?) WHERE id = ?', [item.cantidad, item.product_id]);
+        }
+      }
+      await conn.commit();
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+    const order = await this.getOrderById(id);
+    return order ? { order, previous, changed: next !== null } : null;
   },
 
   // --------------------------------------------------------------------------

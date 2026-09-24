@@ -1,7 +1,7 @@
 # Jaguar Coffee — Plataforma E-commerce
 
 Tienda y plataforma de experiencias de **Jaguar Coffee** (café de especialidad colombiano):
-catálogo, carrito, checkout (Wompi), experiencias, estadías, reservas y panel de administración.
+catálogo, carrito, checkout (Mercado Pago), experiencias, estadías, reservas y panel de administración.
 
 ## Stack
 
@@ -9,7 +9,7 @@ catálogo, carrito, checkout (Wompi), experiencias, estadías, reservas y panel 
 - **Backend:** Node.js + Express 4 (TypeScript)
 - **Base de datos:** MySQL
 - **Auth:** JWT en cookie httpOnly + bcrypt · 4 roles (admin, editor, support, cliente)
-- **Pagos:** Wompi
+- **Pagos:** Mercado Pago Checkout Pro
 - **Seguridad:** Helmet, CORS, rate-limit, validación express-validator
 
 El servidor Express sirve la API y, en producción, los estáticos del frontend.
@@ -17,7 +17,7 @@ El servidor Express sirve la API y, en producción, los estáticos del frontend.
 ## Arranque rápido (local)
 
 ```bash
-cp .env.example .env          # completa DB_*, JWT_SECRET, WOMPI_*, ADMIN_*
+cp .env.example .env          # completa DB_*, JWT_SECRET, MP_*, ADMIN_*
 mysql -u root -p -e "CREATE DATABASE jaguar_dev CHARACTER SET utf8mb4"
 mysql -u root -p jaguar_dev < db/schema.sql
 npm install

@@ -88,7 +88,7 @@ export default function Privacidad() {
             <h2 className="font-sans text-lg font-bold">5. Seguridad de la Información</h2>
           </div>
           <p className="text-sm text-[#122C9B]/70 font-light leading-relaxed">
-            Implementamos medidas técnicas, administrativas y físicas para proteger tus datos contra acceso no autorizado, pérdida, alteración o uso indebido. Los pagos son procesados por WooMPI, quien opera bajo sus propios estándares de seguridad y cumplimiento.
+            Implementamos medidas técnicas, administrativas y físicas para proteger tus datos contra acceso no autorizado, pérdida, alteración o uso indebido. Los pagos son procesados por Mercado Pago, quien opera bajo sus propios estándares de seguridad y cumplimiento.
           </p>
         </section>
 

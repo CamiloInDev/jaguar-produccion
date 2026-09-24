@@ -135,7 +135,10 @@ export interface Order {
   user_email?: string;
   estado: OrderStatus;
   total: number;
-  wompi_transaction_id?: string;
+  /** id del pago en la pasarela (Mercado Pago) — el último aplicado a la orden */
+  payment_id?: string;
+  /** id de la preferencia de Checkout Pro con la que se cobró */
+  preference_id?: string;
   direccion_envio: ShippingAddress;
   notas?: string;
   items: OrderItem[];

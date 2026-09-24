@@ -30,7 +30,7 @@ mantenerla sin conocer la historia interna del proyecto.
 | Backend | Node.js + Express 4 (TypeScript) |
 | Base de datos | **MySQL** (incluida en el plan Business) |
 | Auth | JWT en cookie httpOnly + bcrypt |
-| Pagos | Wompi (hoy **sandbox** — ver §12) |
+| Pagos | Mercado Pago Checkout Pro (Preferences API; hoy sin credenciales reales — ver §12) |
 | Seguridad | Helmet, CORS, rate-limit, validación express-validator, 4 roles |
 
 El servidor Express sirve **la API** y, en producción, **los estáticos del
@@ -115,9 +115,10 @@ crítica, el servidor **no arranca** y el log dice exactamente cuál falta.
 | `ADMIN_PASSWORD` | *(secreto, ≥8)* | Contraseña del admin inicial. **No queda hardcodeada** en el código |
 | `ADMIN_NOMBRE` | `Administrador` | Opcional |
 | `ADMIN_APELLIDO` | `Jaguar` | Opcional |
-| `WOMPI_INTEGRITY_KEY` | *(de Wompi)* | Firma la solicitud de pago (checkout). Sandbox o producción |
-| `WOMPI_EVENTS_KEY` | *(de Wompi)* | Dashboard de Wompi → Eventos. Es un secreto **distinto** al de integridad; firma el webhook entrante |
-| `VITE_WOMPI_PUBLIC_KEY` | *(de Wompi)* | El frontend la necesita en **build** (ver §5.4) |
+| `MP_ACCESS_TOKEN` | *(de Mercado Pago)* | *Tus integraciones → [app] → Credenciales de prueba / producción → Access Token*. Solo backend. El de prueba **también** empieza con `APP_USR-`: cada ambiente con el suyo |
+| `MP_WEBHOOK_SECRET` | *(de Mercado Pago)* | *Tus integraciones → [app] → Webhooks → Configurar notificaciones* → clave secreta. Valida la firma `x-signature` del webhook; **no** es el Access Token |
+| `MP_STATEMENT_DESCRIPTOR` | `JAGUARCOFFEE` | Opcional. Texto en el extracto de la tarjeta (máx. 13) |
+| `MP_EXCLUDED_PAYMENT_TYPES` · `MP_MAX_INSTALLMENTS` · `MP_PREFERENCE_EXPIRATION_MINUTES` | *(vacías)* | Opcionales — decisiones de producto: excluir medios (`ticket`=Efecty, `bank_transfer`=PSE), tope de cuotas, vigencia del link de pago. Vacías = comportamiento por defecto de Mercado Pago |
 | `SMTP_HOST` | `smtp.hostinger.com` | hPanel → Correos → cuenta de correo (ej. `noreply@tudominio.com`). Obligatorio en producción |
 | `SMTP_PORT` | `587` | |
 | `SMTP_USER` | `noreply@tudominio.com` | |
@@ -203,10 +204,9 @@ duplicar datos: crea o actualiza el admin (desde `ADMIN_EMAIL`/`ADMIN_PASSWORD`)
 e importa el catálogo real (26 productos, experiencias, haciendas, slides)
 leyendo `db.json` del repo.
 
-> **Sobre `VITE_WOMPI_PUBLIC_KEY`:** se incrusta en el frontend en tiempo de
-> **build**, no se lee en runtime. Si esa clave cambia después, hay que volver
-> a disparar un rebuild (push a la rama, o *Redeploy* manual en hPanel). Las
-> demás variables sí se leen en runtime — basta con **Restart**.
+> **Sobre las variables de Mercado Pago:** todas se leen en **runtime** (no hay
+> ninguna `VITE_*` de pagos — Checkout Pro redirige a `init_point` y no necesita
+> Public Key en el frontend), así que cambiarlas solo requiere **Restart**.
 
 ### 5.5 Arrancar / reiniciar la app
 
@@ -241,7 +241,7 @@ Checklist para levantarlo:
    - `NODE_ENV=production` (staging corre el mismo código que producción; lo
      que lo distingue es el dominio y la base de datos, no `NODE_ENV`).
    - `DB_*` apuntando a la base de datos de staging del paso 2.
-   - `WOMPI_*` pueden quedarse en **sandbox** en staging sin problema.
+   - `MP_*` con las credenciales de **prueba** de la app de Mercado Pago (y la URL de webhook en *modo prueba*).
    - `SMTP_*` reales (hPanel → Correos → crear cuenta, ej.
      `noreply@tudominio.com`) — son obligatorias porque `NODE_ENV=production`
      lo exige (ver `server/config/env.ts`); puede ser la misma cuenta de correo
@@ -267,8 +267,12 @@ Checklist manual:
       carguen productos, órdenes, mensajes, slides y reservas.
 - [ ] Crea/edita un producto de prueba desde el panel y confirma que aparece
       en la tienda.
-- [ ] Prueba un checkout completo con las llaves de Wompi que tengas cargadas
-      (sandbox o producción).
+- [ ] Prueba un checkout completo con las credenciales de Mercado Pago que
+      tengas cargadas: con las de **prueba**, abre el checkout en incógnito con
+      el *comprador de prueba* y la tarjeta Mastercard `5254 1336 7440 3564`
+      (CVV `123`, vence `11/30`, titular `APRO` = aprobado, `OTHE` = rechazado,
+      `CONT` = pendiente). La orden debe quedar `pagado` al volver al sitio.
+      Guía completa: `.claude/skills/mercadopago-checkout/SKILL.md` §4.
 - [ ] Revisa la consola del navegador — si algo se bloquea por CSP (imágenes,
       scripts o iframes de terceros que falten), sale como error `Content-
       Security-Policy` ahí. Los orígenes permitidos están en `server.ts`
@@ -279,7 +283,7 @@ Checklist manual:
 ## 7. Desarrollo local
 
 ```bash
-cp .env.example .env        # completa DB_* apuntando a un MySQL local + JWT/Wompi/ADMIN
+cp .env.example .env        # completa DB_* apuntando a un MySQL local + JWT/MP_*/ADMIN
 # Crea la DB local e importa el esquema:
 mysql -u root -p -e "CREATE DATABASE jaguar_dev CHARACTER SET utf8mb4"
 mysql -u root -p jaguar_dev < db/schema.sql
@@ -378,7 +382,7 @@ hay que aplicarla manualmente en producción **antes** del restart — no hay un
 sistema de migraciones, así que cualquier `ALTER TABLE` se corre a mano por
 phpMyAdmin o SSH.
 
-Si el cambio toca `VITE_WOMPI_PUBLIC_KEY` o cualquier otra variable
+Si el cambio toca cualquier variable
 `VITE_*`, hace falta un `npm run build` nuevo — cambiar solo la variable en
 hPanel y reiniciar **no** es suficiente (ver nota en §5.4).
 
@@ -399,7 +403,8 @@ Hay tres capas, cada una prueba algo distinto:
    `db/schema.sql` que producción). `tests/setup.ts` fuerza
    `DB_NAME=jaguar_test` antes de que se cargue cualquier configuración, así
    que **nunca tocan `jaguar_dev`** por accidente. El rate-limiting y la
-   llamada real a la API de Wompi se desactivan/simulan solo en este entorno.
+   llamadas a Mercado Pago se desactivan/simulan solo en este entorno (los tests
+   mockean `server/services/mercadopago.ts`, pero validan la firma real del webhook).
 3. **E2E** (`e2e/`, Playwright) — abren un navegador real y navegan el sitio
    como un usuario. Requieren el servidor levantado (`npm run dev` en otra
    terminal).
@@ -423,22 +428,25 @@ npm run test:e2e       # end-to-end, con el server corriendo aparte
 | `/api/productos` devuelve `[]` | No se corrió el seed | `npm run db:seed` |
 | Login del admin falla | Seed no corrió, o `ADMIN_EMAIL`/`ADMIN_PASSWORD` distintos a los que usas | Re-corre `npm run db:seed` (es idempotente) |
 | Imágenes/mapas/scripts de terceros no cargan en producción | Bloqueado por la CSP (Content-Security-Policy) | Revisa la consola del navegador y agrega el origen que falte en `server.ts` → `helmetConfig.contentSecurityPolicy` |
-| `/api/ordenes/preparar-pago` devuelve `502` | Las llaves de Wompi (`VITE_WOMPI_PUBLIC_KEY`) no son válidas o el merchant no tiene `presigned_acceptance` habilitado | Confirma las llaves con Wompi; revisa el log del server, imprime el motivo exacto |
-| El pago se aprueba en Wompi pero la orden no cambia a `pagado` | El webhook no llega o la firma no coincide | Confirma que `WOMPI_EVENTS_KEY` sea el secreto de **Eventos** (no el de integridad) y que la URL del webhook en el dashboard de Wompi apunte a `https://tudominio.com/api/ordenes/wompi-webhook` |
+| `/api/ordenes/crear-pago` devuelve `502` | Mercado Pago rechazó la preferencia: `MP_ACCESS_TOKEN` inválido/placeholder, o `400 collector_does_not_comply_with_current_regulation` (la cuenta de MP tiene pendiente la validación de identidad) | Revisa el log del server (`[MP] Error creando preferencia`), confirma el Access Token y el estado de la cuenta en Mercado Pago |
+| El pago se aprueba pero la orden sigue `pendiente` | El webhook no llega (URL mal configurada, o pagos con credenciales de prueba, que pueden no notificar) o la firma no coincide (`[MP] Webhook con firma inválida`) | La página de confirmación verifica el pago al volver (`/verificar-pago`), así que normalmente se corrige sola. Si no: confirma que `MP_WEBHOOK_SECRET` sea la clave secreta de **Webhooks** (no el Access Token) y que la URL sea `https://tudominio.com/api/ordenes/mp-webhook` con el evento **Pagos**. Prueba con el **Simulador** de *Tus integraciones* |
+| Log `[MP][ALERTA] pago aprobado que NO cuadra con la orden` | El monto/moneda cobrado no coincide con el total de la orden (a propósito, no se marca pagado) | Revisar el pago en el panel de Mercado Pago y decidir a mano (reembolsar o ajustar) |
+| Al terminar de pagar no vuelve al sitio (en local) | `APP_URL` no es HTTPS: Mercado Pago descarta `back_urls`/`notification_url` HTTP y no acepta `localhost` | Probar en Hostinger (HTTPS) o con un túnel HTTPS (cloudflared/ngrok) apuntando `APP_URL` al túnel |
 | `429 Too Many Requests` en login/checkout durante pruebas manuales | Rate limiting activo (10 intentos de auth / 15 min, 30 de checkout / 15 min) | Es comportamiento esperado en producción; espera la ventana o reinicia el proceso en dev |
 | Cambié una variable `VITE_*` y no se ve el cambio | Esas variables se incrustan en **build time**, no runtime | `npm run build` de nuevo y Restart |
 | El correo de "recuperar contraseña" nunca llega | `SMTP_*` no configurado o incorrecto | Revisa el log del server — si no hay SMTP configurado, imprime el correo simulado ahí en vez de enviarlo; confirma credenciales de la cuenta de correo en hPanel |
 | La burbuja del asistente (chat) no carga o queda en blanco | El dominio del webhook de n8n no está en la CSP, o el workflow de n8n está caído/pausado | Revisa la consola del navegador por errores de CSP; confirma que el workflow esté activo en n8n (`curl` a la URL del webhook debe devolver `200`) |
-| El widget de Wompi da `403 (CloudFront) Request blocked` al abrir | Wompi/CloudFront bloquea el tráfico de esa IP o red (frecuente en redes corporativas/VPN, o tráfico automatizado) | Prueba desde otra red/dispositivo; si persiste, contacta soporte de Wompi con la IP pública desde la que pruebas. No es un bug de la integración — la firma e integridad ya están verificadas correctas |
 
 ---
 
 ## 12. Tareas pendientes conocidas
 
-1. **Wompi producción.** El checkout usa **sandbox**. Antes de aceptar pagos reales:
-   - Cargar credenciales de **producción** de Wompi (cuenta del cliente con NIT verificado): `WOMPI_INTEGRITY_KEY`, `WOMPI_EVENTS_KEY` y `VITE_WOMPI_PUBLIC_KEY` (con prefijo `pub_prod_...`).
-   - El `acceptanceToken` de `/api/ordenes/preparar-pago` se obtiene en tiempo real desde `GET {sandbox|production}.wompi.co/v1/merchants/{public_key}` (no es un valor simulado) — solo confirmar que el merchant de producción tenga `presigned_acceptance` habilitado.
-   - El webhook (`/api/ordenes/wompi-webhook`) verifica la firma con el esquema real de eventos de Wompi (`signature.properties` concatenadas + `timestamp` + `WOMPI_EVENTS_KEY`, con `timingSafeEqual`). Antes de producción, probar contra un evento real de sandbox para confirmar el `properties` que Wompi efectivamente envía.
+1. **Mercado Pago — credenciales y prueba de punta a punta.** La integración (Checkout Pro) está hecha y probada con tests; falta:
+   - Que la empresa cree/verifique su cuenta de Mercado Pago y una app de **Checkout Pro con "Tipo de API: Preferences API"** en *Tus integraciones*.
+   - Cargar `MP_ACCESS_TOKEN` + `MP_WEBHOOK_SECRET` de **prueba**, configurar el webhook en *modo prueba* (`https://jaguarcoffeeco.com/api/ordenes/mp-webhook`, evento **Pagos**) y hacer una compra de prueba de punta a punta (§6).
+   - Para producción: activar credenciales de producción (industria + sitio web), cargarlas en Hostinger, webhook en *modo producción*, una compra real de monto bajo y su reembolso.
+   - Decisiones de producto pendientes (variables opcionales `MP_*`, §4): ¿excluir Efecty?, ¿tope de cuotas?, ¿vigencia del link de pago?, ¿enviar IVA (`taxes`)? — Mercado Pago asume 19% incluido si no se envía; consultar con el contador.
+   - Guía completa de implementación, pruebas y salida a producción: `.claude/skills/mercadopago-checkout/`.
 
 2. **Backups de MySQL.** Configurar respaldos automáticos de la base de datos en Hostinger (hPanel suele tener esta opción en el panel de la base de datos).
 
@@ -460,7 +468,7 @@ npm run test:e2e       # end-to-end, con el server corriendo aparte
 - **Helmet** (CSP/HSTS en producción), **CORS** restringido a `APP_URL`, **rate-limit** por ruta (desactivado solo en tests).
 - Validación de entrada con **express-validator** en auth, productos, slides, contacto, reservas, órdenes y roles.
 - Órdenes creadas en **transacción** MySQL (orden + ítems + descuento de stock atómico — o se aplica todo o nada).
-- Firma de pagos y verificación del webhook de Wompi con secretos separados que nunca llegan al frontend.
+- Pagos con **Mercado Pago Checkout Pro**: el monto se calcula siempre en el servidor desde `products`; el webhook valida la firma `x-signature` (HMAC-SHA256, `timingSafeEqual`) y **nunca confía en el body** — consulta el pago a la API y solo marca `pagado` si referencia, moneda (COP) y monto coinciden exactamente con la orden. Transiciones idempotentes y sin retroceso (`SELECT … FOR UPDATE`), stock descontado una sola vez. `MP_ACCESS_TOKEN` y `MP_WEBHOOK_SECRET` nunca llegan al frontend.
 - **Gestión de contraseñas real** (no mocks): cambio de contraseña autenticado (`PUT /api/auth/password`, requiere la actual) y recuperación por correo con token de un solo uso, expira en 1 hora, se guarda solo su hash SHA-256 en `password_resets` (`POST /api/auth/recuperar` + `POST /api/auth/restablecer`).
 
 ---

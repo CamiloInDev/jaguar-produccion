@@ -151,7 +151,7 @@ export default function Home() {
             <div className="space-y-1">
               <h3 className="font-sans text-lg font-bold text-[#122C9B]">Transacción Segura</h3>
               <p className="text-xs text-[#122C9B]/70 font-light leading-relaxed">
-                Tus compras son procesadas directamente vía WooMPI, la pasarela de pagos líder en Colombia con encriptación AES-256.
+                Pagas en el checkout seguro de Mercado Pago: los datos de tu tarjeta nunca pasan por nuestro sitio.
               </p>
             </div>
           </div>
