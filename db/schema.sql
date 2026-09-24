@@ -32,6 +32,10 @@
 --
 -- Si `courses` ya existe pero sin la columna `imagen_url` (agregada después):
 --   ALTER TABLE courses ADD COLUMN imagen_url TEXT NULL AFTER syllabus;
+--
+-- Si `users` no tiene la columna `token_version` (agregada 2026-09-24 para poder
+-- invalidar sesiones al cambiar la contraseña), córrelo ANTES de desplegar el código nuevo:
+--   ALTER TABLE users ADD COLUMN token_version INT NOT NULL DEFAULT 0 AFTER rol;
 -- ============================================================================
 
 SET NAMES utf8mb4;
@@ -48,6 +52,8 @@ CREATE TABLE IF NOT EXISTS users (
   apellido      VARCHAR(100) NOT NULL,
   telefono      VARCHAR(30)  NOT NULL DEFAULT '',
   rol           ENUM('admin','editor','support','cliente') NOT NULL DEFAULT 'cliente',
+  -- Sube en cada cambio/restablecimiento de contraseña: invalida las sesiones (JWT) emitidas antes
+  token_version INT          NOT NULL DEFAULT 0,
   created_at    VARCHAR(32)  NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

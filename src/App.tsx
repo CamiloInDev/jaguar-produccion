@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore, useCartStore } from './store';
 
@@ -12,27 +12,30 @@ import FloatingCart from './components/FloatingCart';
 import ChatBubble from './components/ChatBubble';
 
 // Pages
+// Home va en el paquete principal (es la entrada más común). El resto se descarga al
+// visitarlo: así quien entra al inicio no baja también el panel Admin (~2.200 líneas), la
+// cuenta o el checkout. Mejora LCP e INP (Core Web Vitals).
 import Home from './pages/Home';
-import Tienda from './pages/Tienda';
-import ProductDetail from './pages/ProductDetail';
-import Experiencias from './pages/Experiencias';
-import ExperienciaDetail from './pages/ExperienciaDetail';
-import Turismo from './pages/Turismo';
-import HaciendaDetail from './pages/HaciendaDetail';
-import Academia from './pages/Academia';
-import CasaJaguar from './pages/CasaJaguar';
-import NuestraPlanta from './pages/NuestraPlanta';
-import Contacto from './pages/Contacto';
-import Privacidad from './pages/Privacidad';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import RecuperarPassword from './pages/RecuperarPassword';
-import RestablecerPassword from './pages/RestablecerPassword';
-import CartPage from './pages/CartPage';
-import CheckoutPage from './pages/CheckoutPage';
-import ConfirmationPage from './pages/ConfirmationPage';
-import MiCuenta from './pages/MiCuenta';
-import Admin from './pages/Admin';
+const Tienda = lazy(() => import('./pages/Tienda'));
+const ProductDetail = lazy(() => import('./pages/ProductDetail'));
+const Experiencias = lazy(() => import('./pages/Experiencias'));
+const ExperienciaDetail = lazy(() => import('./pages/ExperienciaDetail'));
+const Turismo = lazy(() => import('./pages/Turismo'));
+const HaciendaDetail = lazy(() => import('./pages/HaciendaDetail'));
+const Academia = lazy(() => import('./pages/Academia'));
+const CasaJaguar = lazy(() => import('./pages/CasaJaguar'));
+const NuestraPlanta = lazy(() => import('./pages/NuestraPlanta'));
+const Contacto = lazy(() => import('./pages/Contacto'));
+const Privacidad = lazy(() => import('./pages/Privacidad'));
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+const RecuperarPassword = lazy(() => import('./pages/RecuperarPassword'));
+const RestablecerPassword = lazy(() => import('./pages/RestablecerPassword'));
+const CartPage = lazy(() => import('./pages/CartPage'));
+const CheckoutPage = lazy(() => import('./pages/CheckoutPage'));
+const ConfirmationPage = lazy(() => import('./pages/ConfirmationPage'));
+const MiCuenta = lazy(() => import('./pages/MiCuenta'));
+const Admin = lazy(() => import('./pages/Admin'));
 
 export default function App() {
   const { checkAuth, loading } = useAuthStore();
@@ -68,6 +71,11 @@ export default function App() {
 
         {/* Core dynamic route display panel */}
         <main className="flex-grow">
+          <Suspense fallback={
+            <div className="py-24 flex justify-center" aria-label="Cargando">
+              <div className="w-8 h-8 border-4 border-[#FFA42C] border-t-transparent rounded-full animate-spin" />
+            </div>
+          }>
           <Routes>
             {/* Public Access Paths */}
             <Route path="/" element={<Home />} />
@@ -103,6 +111,7 @@ export default function App() {
             {/* General Fallbacks */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </Suspense>
         </main>
 
         <Footer />

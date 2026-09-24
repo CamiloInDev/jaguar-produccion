@@ -33,6 +33,21 @@ export const authRateLimiter = rateLimit({
   }
 });
 
+/**
+ * Formularios públicos sin login (contacto, reservas): un límite propio y bajo, porque
+ * cada envío escribe en la BD y le llega al equipo. Sin él solo aplicaba el global (500).
+ */
+export const publicFormRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => isTestEnv,
+  handler: (_req, res) => {
+    res.status(429).json({ error: 'Has enviado demasiados formularios seguidos. Intenta de nuevo en unos minutos.' });
+  }
+});
+
 export const checkoutRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,

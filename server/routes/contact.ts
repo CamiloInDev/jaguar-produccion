@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { publicFormRateLimiter } from '../middleware/rateLimiter';
 import { dbService } from '../db';
 import { authenticateToken, requireRole } from '../middleware/auth';
 import { contactValidation, handleValidationErrors } from '../middleware/validate';
@@ -6,7 +7,7 @@ import { internalError } from '../middleware/errorHandler';
 
 const router = Router();
 
-router.post('/', contactValidation, handleValidationErrors, async (req, res) => {
+router.post('/', publicFormRateLimiter, contactValidation, handleValidationErrors, async (req, res) => {
   try {
     const { nombre, email, asunto, mensaje } = req.body;
     const newMsg = await dbService.saveContactMessage({ nombre, email, asunto, mensaje });

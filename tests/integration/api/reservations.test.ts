@@ -34,10 +34,44 @@ describe('POST /api/reservas (public)', () => {
   it('creates a reservation', async () => {
     const res = await request(app)
       .post('/api/reservas')
-      .send({ tipo: 'academia', item_id: 'exp_1', item_nombre: 'Test Experience', item_slug: 'test-exp', fecha: tomorrow(), nombre: 'Test User', email: 'test@test.com', telefono: '3000000000', cantidad_personas: 2, notas: 'Test notes' });
+      .send({ tipo: 'academia', item_id: 'course_1', item_nombre: 'Nombre manipulado', item_slug: 'x', fecha: tomorrow(), nombre: 'Test User', email: 'test@test.com', telefono: '3000000000', cantidad_personas: 2, notas: 'Test notes' });
     expect(res.status).toBe(201);
     expect(res.body.success).toBe(true);
     expect(res.body.reservation.estado).toBe('pendiente');
+    // El nombre y el slug guardados salen de la BD, no de lo que mande el navegador
+    expect(res.body.reservation.item_nombre).toBe('Test Course');
+    expect(res.body.reservation.item_slug).toBe('test-course');
+  });
+
+  it('creates a farm-stay reservation', async () => {
+    const res = await request(app)
+      .post('/api/reservas')
+      .send({ tipo: 'estadia', item_id: 'hac_1', item_nombre: 'Nombre del navegador', fecha: tomorrow(), nombre: 'Test User', email: 'test@test.com', telefono: '3000000000', cantidad_personas: 4 });
+    expect(res.status).toBe(201);
+    expect(res.body.reservation.item_nombre).toBe('Test Hacienda');
+  });
+
+  it('rejects a course or stay that does not exist, or the wrong type for an id', async () => {
+    const cases = [
+      { tipo: 'academia', item_id: 'no_existe' },
+      { tipo: 'academia', item_id: 'hac_1' },   // una estadía no es un curso
+      { tipo: 'estadia', item_id: 'course_1' },
+    ];
+    for (const c of cases) {
+      const res = await request(app)
+        .post('/api/reservas')
+        .send({ ...c, item_nombre: 'Nombre del navegador', fecha: tomorrow(), nombre: 'Test User', email: 'test@test.com', telefono: '3000000000', cantidad_personas: 1 });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('no está disponible');
+    }
+  });
+
+  it('rejects more people than the capacity', async () => {
+    const res = await request(app)
+      .post('/api/reservas')
+      .send({ tipo: 'estadia', item_id: 'hac_1', item_nombre: 'Nombre del navegador', fecha: tomorrow(), nombre: 'Test User', email: 'test@test.com', telefono: '3000000000', cantidad_personas: 9 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('8');
   });
 
   it('rejects missing fields', async () => {
@@ -99,7 +133,7 @@ describe('PUT /api/reservas/:id/estado - Admin', () => {
   it('admin can update reservation status', async () => {
     const createRes = await request(app)
       .post('/api/reservas')
-      .send({ tipo: 'academia', item_id: 'exp_1', item_nombre: 'Test', item_slug: 'test-exp', fecha: tomorrow(), nombre: 'Test', email: 'test@test.com', telefono: '3001112233', cantidad_personas: 1 });
+      .send({ tipo: 'academia', item_id: 'course_1', item_nombre: 'Test', item_slug: 'test-course', fecha: tomorrow(), nombre: 'Test', email: 'test@test.com', telefono: '3001112233', cantidad_personas: 1 });
     const resId = createRes.body.reservation.id;
 
     const cookies = await getAdminCookies();

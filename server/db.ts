@@ -233,6 +233,21 @@ export const dbService = {
     return { ...rowToUser(r), password_hash: r.password_hash };
   },
 
+  /** Lo mínimo para autorizar una petición: existe, rol actual y versión de sesión vigente. */
+  async getAuthUser(id: string): Promise<{ id: string; email: string; rol: User['rol']; token_version: number } | null> {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      'SELECT id, email, rol, token_version FROM users WHERE id = ? LIMIT 1', [id]
+    );
+    if (!rows.length) return null;
+    const r = rows[0];
+    return { id: r.id, email: r.email, rol: r.rol, token_version: Number(r.token_version) };
+  },
+
+  async countUserOrders(userId: string): Promise<number> {
+    const [rows] = await pool.query<RowDataPacket[]>('SELECT COUNT(*) AS n FROM orders WHERE user_id = ?', [userId]);
+    return Number(rows[0].n);
+  },
+
   async getUserById(id: string): Promise<User | null> {
     const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM users WHERE id = ? LIMIT 1', [id]);
     return rows.length ? rowToUser(rows[0]) : null;
@@ -838,8 +853,17 @@ export const dbService = {
     await pool.query('UPDATE password_resets SET used = 1 WHERE token_hash = ?', [tokenHash]);
   },
 
-  async updateUserPassword(userId: string, passwordHash: string): Promise<void> {
-    await pool.query('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, userId]);
+  /**
+   * Cambia la contraseña y sube token_version, lo que invalida TODAS las sesiones
+   * emitidas antes (ver middleware/auth.ts). Devuelve la versión nueva.
+   */
+  async updateUserPassword(userId: string, passwordHash: string): Promise<number> {
+    await pool.query(
+      'UPDATE users SET password_hash = ?, token_version = token_version + 1 WHERE id = ?',
+      [passwordHash, userId]
+    );
+    const [rows] = await pool.query<RowDataPacket[]>('SELECT token_version FROM users WHERE id = ?', [userId]);
+    return rows.length ? Number(rows[0].token_version) : 0;
   },
 
   // --------------------------------------------------------------------------

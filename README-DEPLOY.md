@@ -312,7 +312,7 @@ Esta cuenta de Hostinger no tiene auto-deploy desde GitHub. Cada cambio de códi
 3. En hPanel: *Sitios web → [dominio] → **Redistribuir** → Subir archivos nuevos* → elige el zip. La configuración y las variables se conservan. Revisa que el archivo de entrada siga siendo `dist/server.cjs` y pulsa **Desplegar**.
 4. Comprueba `/api/health` y la parte que cambiaste.
 
-Si el cambio modifica `db/schema.sql` (tabla o columna nueva), aplica el `ALTER TABLE` en phpMyAdmin **antes** de redistribuir. No hay sistema de migraciones.
+Si el cambio modifica `db/schema.sql` (tabla o columna nueva), aplica el `ALTER TABLE` en phpMyAdmin **antes** de redistribuir. No hay sistema de migraciones. Cada `ALTER` queda documentado en la cabecera de `db/schema.sql`. Ejemplo: `token_version` (2026-09-24) se agrega con `ALTER TABLE users ADD COLUMN token_version INT NOT NULL DEFAULT 0 AFTER rol;`. Sin esa columna, cualquier petición con sesión falla.
 
 **Rollback:** en *Todos los despliegues* del tablero están los despliegues anteriores. Otra opción es hacer `git checkout <commit bueno>`, generar el zip y redistribuir.
 
@@ -376,25 +376,29 @@ npm run test:e2e       # end-to-end, con el server corriendo aparte
    - Decisiones de producto pendientes (variables opcionales `MP_*`, §4): ¿excluir Efecty?, ¿tope de cuotas?, ¿vigencia del link de pago?, ¿enviar IVA (`taxes`)? — Mercado Pago asume 19% incluido si no se envía; consultar con el contador.
    - Guía completa de implementación, pruebas y salida a producción: `.claude/skills/mercadopago-checkout/`.
 
-2. **CSP recortada por el CDN de Hostinger.** En `jaguarcoffeeco.com` la cabecera `Content-Security-Policy` llega como `upgrade-insecure-requests`, porque el CDN (`Server: hcdn`) reemplaza la política de Helmet. En local, el mismo build manda la política completa. Las demás cabeceras de seguridad sí llegan (HSTS, `X-Frame-Options`, `nosniff`, CORS restringido). Antes de producción hay que revisar la configuración del CDN o de seguridad en hPanel para que respete la CSP de la app, o pedírselo a soporte de Hostinger. Mientras tanto, la defensa contra XSS depende solo del código.
+2. **Resuelto 2026-09-24: la CSP recortada por el CDN de Hostinger.** El CDN (`Server: hcdn`) sigue reemplazando la cabecera, pero ahora la misma política también va como `<meta http-equiv="Content-Security-Policy">` en `index.html`. La inyecta `vite build` desde `server/config/csp.ts` y el CDN no la toca. Se verificó en navegador que no bloquea nada del sitio: páginas públicas, chat de n8n y panel admin.
 
 3. **Contraseña y dueño del admin.** El admin inicial (`noreply@jaguarcoffeeco.com`) tiene una contraseña genérica de pruebas. Antes de producción:
    - Cambiarla desde *Mi Cuenta*.
    - Registrar el correo del cliente y darle rol `admin` en *Admin → Usuarios*.
-   - Cambiar la contraseña no cierra las sesiones abiertas (duran hasta 7 días, el JWT no se revoca); ver mejora pendiente en la auditoría.
+   - Desde 2026-09-24, cambiar la contraseña **sí cierra** las sesiones en los otros dispositivos (`token_version`), y el rol se lee de la BD en cada petición, así que un cambio de rol aplica al instante.
 
 4. **Backups de MySQL.** El tablero de la Web App muestra "Respaldos: Diariamente". Falta confirmar que incluyan la base de datos y probar una restauración.
 
 5. **Persistencia de `uploads/` en Hostinger — sin confirmar (ver §8 y §9).** Las imágenes subidas desde el panel de Admin se guardan en disco local del servidor, no en git. Falta confirmar en el primer deploy real si esa carpeta sobrevive a un segundo deploy o se pierde. Si se pierde, evaluar mover el almacenamiento a un servicio externo (Cloudinary, S3-compatible) — la función `optimizeAndSaveImage` en `server/lib/uploads.ts` es el único punto a cambiar.
 
-6. **`npm audit`: vulnerabilidades en dependencias.** El build de Hostinger reporta 13 (7 altas). Las relevantes en runtime son `nodemailer` (alta; ahora el SMTP ya está activo), `react-router-dom` (alta), y `express`, `mysql2` y `axios` (moderadas). No se han aplicado porque varias implican saltos de versión mayor. Hay que actualizarlas en una rama aparte, correr `npm test` y `npx playwright test`, y redistribuir antes de recibir pagos reales.
+6. **Resuelto 2026-09-24: `npm audit`.** Tras `npm audit fix` (sin saltos de versión mayor) quedan **0 vulnerabilidades en dependencias de producción**: nodemailer 9.1.1, react-router-dom 7.18.4, express 4.22.3 y mysql2 3.24.4. Solo quedan 4 moderadas en herramientas de test (vitest), que no se despliegan.
 
+7. **SEO fuera del código.** Hay que dar de alta la propiedad de dominio en Google Search Console y enviar el sitemap, crear el Perfil de Empresa de Google con los mismos nombre, dirección y teléfono del sitio, y subir fotos reales de las bolsas (las de Unsplash son de relleno). Ver `.claude/skills/seo-tienda/SKILL.md`.
 ---
 
 ## 13. Seguridad ya implementada
 
 - Contraseñas con **bcrypt** (cost 12). Sin admin hardcodeado (se crea vía seed + env).
-- **JWT** en cookie `httpOnly`, `secure` en producción, `sameSite: strict`, con `issuer`/`audience`.
+- **JWT** en cookie `httpOnly`, `secure` en producción y `sameSite: strict`, con `issuer`/`audience` verificados. El token solo identifica al usuario: el **rol y la vigencia se leen de la BD en cada petición**, de modo que un cambio de rol o un borrado aplica al instante. Cambiar o restablecer la contraseña sube `users.token_version` y cierra las demás sesiones.
+- **CSP** doble: cabecera de Helmet más `<meta>` en `index.html` (la cabecera la recorta el CDN de Hostinger). Fuente única: `server/config/csp.ts`.
+- Borrar un usuario con órdenes se bloquea (409) para no dejar ventas sin cliente.
+- Formularios públicos (contacto, reservas) con rate limit propio (8 envíos / 15 min por IP). Las reservas validan contra la BD que el curso o la estadía exista, esté activo y tenga cupo.
 - Bloqueo de cuenta tras 5 intentos fallidos de login (15 min).
 - **Registro sin enumeración de emails** (respuesta genérica tanto si el email existe como si no).
 - **4 roles** (`admin`, `editor`, `support`, `cliente`) con `requireRole` por endpoint.
@@ -403,6 +407,19 @@ npm run test:e2e       # end-to-end, con el server corriendo aparte
 - Órdenes creadas en **transacción** MySQL (orden + ítems + descuento de stock atómico — o se aplica todo o nada).
 - Pagos con **Mercado Pago Checkout Pro**: el monto se calcula siempre en el servidor desde `products`; el webhook valida la firma `x-signature` (HMAC-SHA256, `timingSafeEqual`) y **nunca confía en el body** — consulta el pago a la API y solo marca `pagado` si referencia, moneda (COP) y monto coinciden exactamente con la orden. Transiciones idempotentes y sin retroceso (`SELECT … FOR UPDATE`), stock descontado una sola vez. `MP_ACCESS_TOKEN` y `MP_WEBHOOK_SECRET` nunca llegan al frontend.
 - **Gestión de contraseñas real** (no mocks): cambio de contraseña autenticado (`PUT /api/auth/password`, requiere la actual) y recuperación por correo con token de un solo uso, expira en 1 hora, se guarda solo su hash SHA-256 en `password_resets` (`POST /api/auth/recuperar` + `POST /api/auth/restablecer`).
+
+---
+
+## 13.1 SEO
+
+Sin SSR, el servidor inyecta por ruta en `index.html` el título, la descripción, el canonical, Open Graph / Twitter y JSON-LD (`Product`+`Offer` en COP, `OnlineStore`, `WebSite`, `BreadcrumbList`, `LodgingBusiness`). Además:
+- Responde **404 real** para slugs o rutas inexistentes.
+- Pone `noindex` en las páginas privadas.
+- Sirve `/robots.txt` y `/sitemap.xml` generados desde la BD.
+- Redirige `www.` con 301 al dominio sin `www`.
+- Carga las páginas bajo demanda (`React.lazy`), con un bundle inicial de 333 kB en lugar de 590 kB.
+
+Código: `server/seo.ts`. Guía, reglas y pendientes: `.claude/skills/seo-tienda/SKILL.md`. Comprobación rápida: `curl -s https://jaguarcoffeeco.com/tienda/<slug> | grep -E "<title>|canonical|og:|ld\+json"`.
 
 ---
 

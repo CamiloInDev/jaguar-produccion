@@ -39,6 +39,15 @@ router.delete('/:id', authenticateToken, requireAdmin, async (req: Authenticated
       return res.status(400).json({ error: 'No puedes eliminarte a ti mismo.' });
     }
 
+    // orders.user_id no tiene FK: borrar un usuario con compras dejaría sus órdenes huérfanas
+    // (sin cliente asociado en el historial de ventas). En ese caso se bloquea el borrado.
+    const orderCount = await dbService.countUserOrders(req.params.id);
+    if (orderCount > 0) {
+      return res.status(409).json({
+        error: `Este usuario tiene ${orderCount} orden(es) registrada(s) y no se puede eliminar sin perder el historial. Cámbiale el rol a "cliente" si solo quieres quitarle permisos.`,
+      });
+    }
+
     const deleted = await dbService.deleteUser(req.params.id);
     if (!deleted) {
       return res.status(404).json({ error: 'Usuario no encontrado.' });

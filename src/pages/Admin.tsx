@@ -100,6 +100,8 @@ export default function Admin() {
   const [users, setUsers] = useState<User[]>([]);
 
   const [loading, setLoading] = useState(true);
+  // Secciones que no cargaron en el último loadData — se muestran en un aviso en vez de quedar vacías en silencio
+  const [loadErrors, setLoadErrors] = useState<string[]>([]);
 
   if (authLoading) {
     return (
@@ -130,7 +132,7 @@ export default function Admin() {
     try {
       const [pRes, oRes, mRes, sRes, rRes, cRes, hRes, eRes, uRes] = await Promise.allSettled([
         axios.get('/api/productos'),
-        axios.get('/api/ordenes-todas'),
+        axios.get('/api/ordenes/todas'),
         axios.get('/api/contacto'),
         axios.get('/api/slides/all'),
         axios.get('/api/reservas'),
@@ -148,6 +150,18 @@ export default function Admin() {
       if (hRes.status === 'fulfilled' && Array.isArray(hRes.value.data)) setHaciendas(hRes.value.data);
       if (eRes.status === 'fulfilled' && Array.isArray(eRes.value.data)) setExperiences(eRes.value.data);
       if (uRes.status === 'fulfilled' && Array.isArray(uRes.value.data)) setUsers(uRes.value.data);
+
+      // Una respuesta que no es un arreglo (p. ej. HTML de una ruta inexistente) también es un fallo
+      const sections: [string, PromiseSettledResult<any>][] = [
+        ['Cafés', pRes], ['Pedidos', oRes], ['Mensajes', mRes], ['Banner', sRes], ['Reservas', rRes],
+        ['Cursos', cRes], ['Estadías', hRes], ['Experiencias', eRes], ['Usuarios', uRes],
+      ];
+      setLoadErrors(sections
+        .filter(([, r]) => r.status === 'rejected' || !Array.isArray(r.value?.data))
+        .map(([name, r]) => {
+          const status = r.status === 'rejected' ? (r.reason?.response?.status ?? 'sin conexión') : 'respuesta inválida';
+          return `${name} (${status})`;
+        }));
     } catch (err) {
       console.error('Error fetching admin data', err);
     } finally {
@@ -176,7 +190,7 @@ export default function Admin() {
       categoria: 'grano',
       origen: '',
       tueste: '',
-      imagen_url: 'https://images.unsplash.com/photo-1559056191-4819004e3827?auto=format&fit=crop&q=80&w=600'
+      imagen_url: 'https://images.unsplash.com/photo-1587734195503-904fca47e0e9?auto=format&fit=crop&q=80&w=600'
     });
   };
 
@@ -634,6 +648,15 @@ export default function Admin() {
           <span>Refrescar Panel</span>
         </button>
       </div>
+
+      {loadErrors.length > 0 && (
+        <div role="alert" className="bg-red-50 border border-red-200 text-red-800 rounded-2xl px-5 py-4 text-sm space-y-1">
+          <p className="font-bold">No se pudieron cargar algunas secciones: {loadErrors.join(', ')}.</p>
+          <p className="text-xs text-red-700">
+            Si aparece 401 o 403, cierra sesión y vuelve a entrar. Si persiste, revisa los registros de la app en Hostinger.
+          </p>
+        </div>
+      )}
 
       {/* Analytics Bento metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">

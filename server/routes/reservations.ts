@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { publicFormRateLimiter } from '../middleware/rateLimiter';
 import { dbService } from '../db';
 import { authenticateToken, requireRole } from '../middleware/auth';
 import { reservationValidation, handleValidationErrors } from '../middleware/validate';
@@ -7,7 +8,7 @@ import { internalError } from '../middleware/errorHandler';
 /** Rutas de reservas — público (POST crear, GET fechas ocupadas), admin/support (listar, cambiar estado) */
 const router = Router();
 
-router.post('/', reservationValidation, handleValidationErrors, async (req, res) => {
+router.post('/', publicFormRateLimiter, reservationValidation, handleValidationErrors, async (req, res) => {
   try {
     const { tipo, item_id, item_nombre, item_slug, fecha, nombre, email, telefono, cantidad_personas, notas } = req.body;
 
@@ -18,11 +19,23 @@ router.post('/', reservationValidation, handleValidationErrors, async (req, res)
       return res.status(400).json({ error: 'La fecha seleccionada no es válida o ya pasó.' });
     }
 
+    // El curso/estadía debe existir y estar activo, y el nombre/slug guardados salen de la BD:
+    // antes se aceptaba cualquier item_id e item_nombre enviados por el navegador.
+    const item = tipo === 'academia'
+      ? await dbService.getCourseById(item_id).then(c => c && { activo: c.activo, nombre: c.title, slug: c.slug, capacidad: c.maxPeople })
+      : await dbService.getHaciendaById(item_id).then(h => h && { activo: h.activo, nombre: h.nombre, slug: h.slug, capacidad: h.capacidad_max });
+    if (!item || !item.activo) {
+      return res.status(400).json({ error: 'El curso o la estadía seleccionada no está disponible.' });
+    }
+    if (item.capacidad && Number(cantidad_personas) > item.capacidad) {
+      return res.status(400).json({ error: `El cupo máximo es de ${item.capacidad} personas.` });
+    }
+
     const reservation = await dbService.createReservation({
       tipo,
       item_id,
-      item_nombre,
-      item_slug: item_slug || '',
+      item_nombre: item.nombre,
+      item_slug: item.slug || item_slug || '',
       fecha,
       nombre,
       email,

@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -22,6 +23,8 @@ import slideRoutes from './server/routes/slides';
 import reservationRoutes from './server/routes/reservations';
 import userRoutes from './server/routes/users';
 import { UPLOADS_DIR, ensureUploadsDir } from './server/lib/uploads';
+import { cspDirectives } from './server/config/csp';
+import { buildSeo, sitemapUrls, clearSeoCache } from './server/seo';
 
 // -----------------------------------------------------------------------------
 // Global error handlers to catch ALL crashes
@@ -55,19 +58,9 @@ const helmetConfig: HelmetOptions & { crossOriginEmbedderPolicy?: boolean } = {
   strictTransportSecurity: env.NODE_ENV === 'production'
     ? { maxAge: 31536000, includeSubDomains: true, preload: true }
     : false,
+  // Directivas en server/config/csp.ts (compartidas con la <meta> que inyecta vite.config.ts)
   contentSecurityPolicy: env.NODE_ENV === 'production'
-    ? {
-        directives: {
-          defaultSrc: ["'self'"],
-          scriptSrc: ["'self'", "https://www.instagram.com", "https://*.cdninstagram.com"],
-          frameSrc: ["'self'", "https://www.instagram.com", "https://*.cdninstagram.com", "https://www.google.com", "https://n8n.skatmaskacore.com"],
-          imgSrc: ["'self'", "data:", "https://www.instagram.com", "https://*.cdninstagram.com", "https://cafejaguar.com", "https://images.unsplash.com"],
-          connectSrc: ["'self'", "https://www.instagram.com"],
-          styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-          fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
-          baseUri: ["'self'"],
-        },
-      }
+    ? { useDefaults: false, directives: cspDirectives }
     : false,
 };
 
@@ -83,8 +76,32 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
+let sitemapCache: { at: number; xml: string } | null = null;
+
+// Una sola versión del host para Google: www.jaguarcoffeeco.com → jaguarcoffeeco.com (301)
+if (env.NODE_ENV === 'production') {
+  const canonicalHost = new URL(env.APP_URL).hostname;
+  app.use((req, res, next) => {
+    if (req.hostname === 'www.' + canonicalHost) {
+      return res.redirect(301, `${env.APP_URL}${req.originalUrl}`);
+    }
+    next();
+  });
+}
+
 // Rate limiting for API routes
 app.use(apiRateLimiter);
+
+// Al editar catálogo desde Admin se vacía el caché del SEO por ruta y del sitemap,
+// para que títulos, precios e imágenes nuevos salgan de inmediato en previews y en Google.
+app.use(/^\/api\/(productos|experiencias|haciendas)/, (req, res, next) => {
+  if (req.method !== 'GET') {
+    res.on('finish', () => {
+      if (res.statusCode < 400) { clearSeoCache(); sitemapCache = null; }
+    });
+  }
+  next();
+});
 
 // Body parsing
 app.use(express.json({ limit: '10kb' }));
@@ -122,6 +139,30 @@ app.use('/api/reservas', reservationRoutes);
 app.use('/api/usuarios', userRoutes);
 
 // -----------------------------------------------------------------------------
+// SEO: robots.txt y sitemap.xml dinámico (solo URLs públicas, canónicas y activas).
+// Las rutas privadas NO se bloquean aquí: llevan noindex y Google necesita poder leerlo.
+// -----------------------------------------------------------------------------
+app.get('/robots.txt', (_req, res) => {
+  res.type('text/plain').send(`User-agent: *\nDisallow: /api/\nAllow: /\n\nSitemap: ${env.APP_URL}/sitemap.xml\n`);
+});
+
+app.get('/sitemap.xml', async (_req, res, next) => {
+  try {
+    if (!sitemapCache || Date.now() - sitemapCache.at > 10 * 60 * 1000) {
+      const urls = await sitemapUrls(env.APP_URL);
+      const body = urls.map(u => `  <url><loc>${u.replace(/&/g, '&amp;')}</loc></url>`).join('\n');
+      sitemapCache = {
+        at: Date.now(),
+        xml: `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${body}\n</urlset>\n`,
+      };
+    }
+    res.type('application/xml').send(sitemapCache.xml);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// -----------------------------------------------------------------------------
 // Archivos subidos por el admin (imágenes optimizadas) — mismo path en dev y prod
 // -----------------------------------------------------------------------------
 ensureUploadsDir();
@@ -150,10 +191,35 @@ async function start() {
       app.use(vite.middlewares);
     } else {
       const distPath = path.join(process.cwd(), 'dist');
-      app.use(express.static(distPath));
-      app.get('*', (_req, res) => {
-        res.sendFile(path.join(distPath, 'index.html'));
+      // Plantilla leída una vez; el <title> fijo se reemplaza por el head SEO de cada ruta.
+      const indexTemplate = fs.readFileSync(path.join(distPath, 'index.html'), 'utf8');
+      const titleTag = /<title>[\s\S]*?<\/title>/;
+      if (!titleTag.test(indexTemplate)) throw new Error('dist/index.html no tiene <title>: no se puede inyectar el SEO');
+
+      app.use(express.static(distPath, {
+        index: false, // "/" también pasa por el inyector SEO de abajo
+        setHeaders: (res, filePath) => {
+          // Los assets de Vite llevan hash en el nombre: se pueden cachear para siempre
+          if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          }
+        },
+      }));
+      app.get('*', async (req, res, next) => {
+        // Rutas de API o archivos inexistentes no deben devolver la SPA
+        if (req.path.startsWith('/api/') || path.extname(req.path)) {
+          return res.status(404).json({ error: 'No encontrado.' });
+        }
+        try {
+          const seo = await buildSeo(env.APP_URL, req.path);
+          if (seo.noindex) res.setHeader('X-Robots-Tag', 'noindex');
+          res.setHeader('Cache-Control', 'no-cache');
+          res.status(seo.status).type('html').send(indexTemplate.replace(titleTag, seo.head));
+        } catch (err) {
+          next(err);
+        }
       });
+      app.use(errorHandler);
     }
 
     app.listen(env.PORT, '0.0.0.0', () => {

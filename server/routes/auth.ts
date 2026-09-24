@@ -37,6 +37,12 @@ const COOKIE_OPTIONS: import('express').CookieOptions = {
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
 };
 
+/** Emite la cookie de sesión. `tv` ata el token a la versión de sesión vigente del usuario. */
+function issueSession(res: import('express').Response, user: { id: string; email: string; rol: string }, tokenVersion: number): void {
+  const token = jwt.sign({ id: user.id, email: user.email, rol: user.rol, tv: tokenVersion }, env.JWT_SECRET, JWT_OPTIONS);
+  res.cookie('token', token, COOKIE_OPTIONS);
+}
+
 router.post('/registro', authRateLimiter, registerValidation, handleValidationErrors, async (req, res) => {
   try {
     const { email, password, nombre, apellido, telefono } = req.body;
@@ -57,12 +63,7 @@ router.post('/registro', authRateLimiter, registerValidation, handleValidationEr
       rol: 'cliente',
     });
 
-    const token = jwt.sign(
-      { id: user.id, email: user.email, rol: user.rol },
-      env.JWT_SECRET,
-      JWT_OPTIONS
-    );
-    res.cookie('token', token, COOKIE_OPTIONS);
+    issueSession(res, user, 0);
 
     return res.status(201).json({ user });
   } catch (err: any) {
@@ -98,12 +99,8 @@ router.post('/login', authRateLimiter, loginValidation, handleValidationErrors, 
     await dbService.clearLoginAttempts(email);
     console.log(`[SECURITY] Successful login for ${email}`);
 
-    const token = jwt.sign(
-      { id: user.id, email: user.email, rol: user.rol },
-      env.JWT_SECRET,
-      JWT_OPTIONS
-    );
-    res.cookie('token', token, COOKIE_OPTIONS);
+    const authUser = await dbService.getAuthUser(user.id);
+    issueSession(res, user, authUser?.token_version ?? 0);
 
     const { password_hash, ...safeUser } = user;
     return res.json({ user: safeUser });
@@ -195,8 +192,11 @@ router.put('/password', authenticateToken, changePasswordValidation, handleValid
       return res.status(400).json({ error: 'La contraseña actual no es correcta.' });
     }
 
-    await dbService.updateUserPassword(user.id, hashPassword(newPassword));
-    return res.json({ success: true, message: 'Contraseña actualizada correctamente.' });
+    // Sube token_version: se cierran las sesiones en otros dispositivos, y esta se re-emite
+    // con la versión nueva para no sacar al usuario que acaba de cambiarla.
+    const tokenVersion = await dbService.updateUserPassword(user.id, hashPassword(newPassword));
+    issueSession(res, user, tokenVersion);
+    return res.json({ success: true, message: 'Contraseña actualizada. Se cerró la sesión en tus otros dispositivos.' });
   } catch (err: any) {
     return internalError(res, err);
   }
