@@ -74,53 +74,44 @@ estáticos desde el mismo Express.
 
 ## 3. Requisitos en Hostinger Business
 
-- Plan **Business** (o superior): soporta hasta 5 apps Node.js + MySQL + acceso SSH.
-- Acceso a **hPanel** (Websites → Node.js web app + Bases de datos MySQL + phpMyAdmin).
-- **Acceso SSH** habilitado (hPanel → tu sitio → Avanzado → SSH Access). No hace
-  falta para el build (lo hace hPanel automáticamente, ver §5), pero sí para
-  importar `schema.sql` y correr `npm run db:seed` la primera vez.
-- Node.js **20 LTS** o superior (hPanel permite elegir 18/20/22/24 al crear la app).
+- Plan **Business** (o superior). Soporta hasta 5 Web Apps de Node.js, MySQL y correo del dominio.
+- Acceso a **hPanel**. Se usan: Sitios web → Web App Node.js, Bases de datos → Gestión, phpMyAdmin y Emails.
+- **No hace falta SSH.** El esquema y los datos iniciales se importan por phpMyAdmin (§5.3).
 
-> **Cómo funciona hoy (2026) el hosting Node.js de Hostinger:** no es un VPS con
-> SSH libre — es una plataforma gestionada tipo Vercel/Render. Creas la app en
-> **hPanel → Websites → Add Website → Node.js web app**, conectas el repo de
-> GitHub (o subes un `.zip`), y hPanel corre `npm install` + tu *build command*
-> automáticamente en cada push, y arranca el *entry file* que configures.
-> El SSH es una función aparte (Avanzado → SSH Access) pensada para tareas
-> puntuales (importar la BD, correr el seed), no para el ciclo de build/deploy.
-> Fuentes: [Creating a Node.js App](https://docs.hostinger.com/node.js/creating-an-app),
-> [Node.js hosting options](https://www.hostinger.com/support/node-js-hosting-options-at-hostinger/),
-> [FTP & SSH Access](https://docs.hostinger.com/websites/ftp-ssh).
+> **Cómo funciona en esta cuenta** (confirmado en el primer despliegue, 2026-09-24):
+> - **No hay integración con GitHub.** La app se despliega **subiendo un `.zip`** del proyecto, y cada actualización es subir un zip nuevo (§9).
+> - Al recibir el zip, Hostinger corre `npm install` y `npm run build`, y arranca el *archivo de entrada* configurado.
+> - El panel **no deja definir el comando de build**: solo gestor de paquetes y archivo de entrada. Además, con `NODE_ENV=production` instala **solo** `dependencies`. Por eso todo lo que usa `npm run build` (vite, esbuild, plugins) debe estar en `dependencies`, no en `devDependencies`.
+> - Delante de la app hay un CDN de Hostinger (`Server: hcdn`) que **reemplaza la cabecera `Content-Security-Policy`** de la app por `upgrade-insecure-requests`. Ver §12.
+>
+> Fuentes: [Crear una app Node.js](https://docs.hostinger.com/node.js/creating-an-app) · [Conectar MySQL a Node.js](https://www.hostinger.com/support/connecting-a-hostinger-mysql-database-to-a-node-js-application/) · [Bases de datos](https://docs.hostinger.com/websites/databases)
 
 ---
 
 ## 4. Variables de entorno
 
-Se configuran en **hPanel → Node.js app → Environment variables**. Todas se
+Se configuran en **hPanel → Sitios web → [dominio] → Redistribuir → Variables de entorno** (§5.2). Todas se
 leen y validan al arrancar (con Zod, en `server/config/env.ts`); si falta una
 crítica, el servidor **no arranca** y el log dice exactamente cuál falta.
 
 | Variable | Ejemplo / valor | Notas |
 |----------|-----------------|-------|
 | `NODE_ENV` | `production` | |
-| `PORT` | `3000` | Hostinger normalmente inyecta el puerto; usa el que indique el panel |
+| `PORT` | *(no definir)* | Hostinger lo inyecta solo. En local, `3000` por defecto |
 | `APP_URL` | `https://tudominio.com` | Dominio real. Restringe CORS y va en el `audience` del JWT |
 | `JWT_SECRET` | *(64 bytes hex)* | Generar: `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"` |
-| `DB_HOST` | `localhost` | Lo da hPanel al crear la DB (suele ser `localhost`) |
+| `DB_HOST` | `127.0.0.1` | **No** `localhost`: Node puede resolverlo por IPv6 (`::1`) y el usuario MySQL de Hostinger no tiene permiso ahí |
 | `DB_PORT` | `3306` | |
 | `DB_USER` | `u123_jaguar` | Usuario MySQL de hPanel |
 | `DB_PASSWORD` | *(secreto)* | Contraseña del usuario MySQL |
 | `DB_NAME` | `u123_jaguar` | Nombre de la base de datos de hPanel |
-| `ADMIN_EMAIL` | `admin@tudominio.com` | Solo lo usa el seed para crear el admin inicial |
-| `ADMIN_PASSWORD` | *(secreto, ≥8)* | Contraseña del admin inicial. **No queda hardcodeada** en el código |
-| `ADMIN_NOMBRE` | `Administrador` | Opcional |
-| `ADMIN_APELLIDO` | `Jaguar` | Opcional |
+| `ADMIN_EMAIL` · `ADMIN_PASSWORD` · `ADMIN_NOMBRE` · `ADMIN_APELLIDO` | *(solo local)* | Los usa `npm run db:seed` en desarrollo. **En Hostinger no se cargan**: el admin se crea registrándose en el sitio y promoviéndolo (§5.4) |
 | `MP_ACCESS_TOKEN` | *(de Mercado Pago)* | *Tus integraciones → [app] → Credenciales de prueba / producción → Access Token*. Solo backend. El de prueba **también** empieza con `APP_USR-`: cada ambiente con el suyo |
 | `MP_WEBHOOK_SECRET` | *(de Mercado Pago)* | *Tus integraciones → [app] → Webhooks → Configurar notificaciones* → clave secreta. Valida la firma `x-signature` del webhook; **no** es el Access Token |
 | `MP_STATEMENT_DESCRIPTOR` | `JAGUARCOFFEE` | Opcional. Texto en el extracto de la tarjeta (máx. 13) |
 | `MP_EXCLUDED_PAYMENT_TYPES` · `MP_MAX_INSTALLMENTS` · `MP_PREFERENCE_EXPIRATION_MINUTES` | *(vacías)* | Opcionales — decisiones de producto: excluir medios (`ticket`=Efecty, `bank_transfer`=PSE), tope de cuotas, vigencia del link de pago. Vacías = comportamiento por defecto de Mercado Pago |
 | `SMTP_HOST` | `smtp.hostinger.com` | hPanel → Correos → cuenta de correo (ej. `noreply@tudominio.com`). Obligatorio en producción |
-| `SMTP_PORT` | `587` | |
+| `SMTP_PORT` | `465` | SSL implícito (el código activa `secure` con 465). `587` también funciona con STARTTLS |
 | `SMTP_USER` | `noreply@tudominio.com` | |
 | `SMTP_PASSWORD` | *(secreto)* | Contraseña de esa cuenta de correo |
 | `SMTP_FROM` | `Jaguar Coffee <noreply@tudominio.com>` | Remitente que ve el usuario en el correo de recuperación de contraseña |
@@ -134,122 +125,66 @@ crítica, el servidor **no arranca** y el log dice exactamente cuál falta.
 
 ## 5. Despliegue paso a paso
 
-### 5.1 Crear la base de datos
+Este es el orden que se siguió en el primer despliegue a `jaguarcoffeeco.com` (2026-09-24).
 
-1. **hPanel → Bases de datos MySQL → Crear**: crea la DB y el usuario. Anota
-   host, nombre, usuario y contraseña — van en las variables `DB_*` del §4.
-2. **hPanel → phpMyAdmin → Importar**: sube y ejecuta **`db/schema.sql`**.
-   Esto crea las 12 tablas del proyecto.
-   - Alternativa por SSH: `mysql -u DB_USER -p DB_NAME < db/schema.sql`
+### 5.1 Crear la base de datos y el correo
 
-El esquema usa `utf8mb4`, columnas `JSON` para arrays (imágenes, dirección de
-envío) y una tabla hija `order_items` para los ítems de cada orden.
+1. **Base de datos:** entra a *Sitios web → [dominio] → Bases de datos → Gestión → Crear nueva base de datos MySQL*. Hostinger antepone un prefijo (ej. `u842711520_`) al nombre y al usuario. Anota el nombre y el usuario completos; la contraseña va solo en `DB_PASSWORD`.
+   - La tarjeta "Base de datos → Conectar" del tablero de la Web App **no sirve para MySQL**: solo ofrece guías para Supabase y MongoDB.
+2. **Correo para SMTP:** entra a *Emails → [dominio]* y activa el plan gratis. Crea el buzón `noreply@[dominio]` y deja en verde los registros MX, SPF, DKIM y DMARC (*Ajustes del dominio*), para que los correos no lleguen a spam.
 
-### 5.2 Configurar las variables de entorno
+### 5.2 Crear la Web App y desplegar
 
-En **hPanel → Node.js app → Environment variables**, carga todas las de la
-tabla del §4. Sin esto el servidor arranca y se cae inmediatamente (a propósito).
+1. **Genera el zip** desde el último commit con `npm run deploy:zip`. Queda en `../jaguar-deploy.zip`, sin `.env`, `node_modules/` ni `dist/`. Si hay cambios sin commitear, el script se detiene.
+2. Ve a *Sitios web → Desplegar app Node.js*, elige el dominio y sube el zip.
+3. Configura la pantalla **"Revisa los ajustes de compilación"** así:
 
-### 5.3 Crear la app Node.js en hPanel (recomendado: GitHub)
-
-**hPanel → Websites → Add Website → Node.js web app** → *Import Git repository*
-→ conecta GitHub (instala la Hostinger GitHub App) → elige el repo
-`jaguar-produccion` y la rama (`master` para producción, otra rama/subdominio
-para staging — ver §5.6). Configura:
-
-| Campo del asistente | Valor |
+| Campo | Valor |
 |---|---|
-| Node.js version | 20 (o 22/24) |
-| Package manager | npm (auto-detectado por `package-lock.json`) |
-| Build command | `npm run build` |
-| Output directory | `dist` |
-| Entry file | `dist/server.cjs` |
-| Environment variables | pega el `.env` completo con *Import from .env file*, o cárgalas una por una (tabla del §4) |
+| Preajuste del marco | Express |
+| Versión del nodo | 20.x (o superior) |
+| Directorio raíz | `./` |
+| Ajustes de compilación → Gestor de paquetes | npm |
+| Ajustes de compilación → **Archivo de entrada** | **`dist/server.cjs`**, con extensión. Con `dist/server` Node busca `.js` y la app queda en 503 |
+| Variables de entorno | Todas las del §4 que aplican a producción, una por una, sin comillas ni espacios. `MP_*` pueden ir de relleno (`APP_USR-pendiente` / `pendiente`) hasta tener credenciales |
 
-Cada `git push` a esa rama dispara un rebuild + restart automático.
+4. **Desplegar.** Cuando termine, comprueba que `https://[dominio]/api/health` devuelva `{"status":"ok",...}`.
+   - Si falta una variable, el servidor se detiene al iniciar y se ve **503**. Revisa los *Registros de tiempo de ejecución* del tablero: el log dice cuál variable falta.
 
-> ⚠️ **Verificar en el primer deploy:** `vite`, `esbuild`, `typescript` y `tsx`
-> son `devDependencies` — el build los necesita. Si el log de build falla con
-> `vite: command not found` o similar, es porque hPanel corrió `npm install`
-> en modo producción (sin devDependencies). Solución: cambia el *Build command*
-> a `npm install --include=dev && npm run build` (o revisa si el asistente
-> tiene un campo de *Install command* separado donde forzar esto).
+### 5.3 Tablas y catálogo (phpMyAdmin, una sola vez)
 
-**Alternativa sin GitHub (subir manualmente):** *Upload your files* → sube un
-`.zip` del proyecto **sin** `node_modules/`, `dist/` ni `.git/` — hPanel corre
-el mismo `npm install` + build al recibirlo. Cada actualización futura implica
-volver a subir el `.zip`.
+Entra a *Bases de datos → Gestión → phpMyAdmin*, selecciona la base a la izquierda y usa la pestaña **Importar**, con las opciones por defecto:
 
-### 5.4 Base de datos y seed (por SSH, una sola vez)
-
-El build/deploy automático de hPanel **no** corre tareas puntuales como el
-seed — para eso usa SSH (**hPanel → tu sitio → Avanzado → SSH Access**, anota
-host/usuario/puerto, `ssh usuario@host -p puerto`):
+1. `db/schema.sql`: crea las 12 tablas.
+2. El SQL del catálogo: 26 productos, experiencias, estadías, cursos y slides, **sin usuarios**. Se genera en local con el seed real sobre una base temporal:
 
 ```bash
-# 1. Importar el esquema (una vez, o por phpMyAdmin — ver §5.1)
-mysql -u DB_USER -p DB_NAME < db/schema.sql
-
-# 2. Verificar que node/npm estén disponibles en esta shell
-node -v && npm -v
-
-# 3. Ir a la carpeta donde hPanel desplegó la app e instalar deps + seed
-cd ~/domains/tudominio.com/public_html   # ruta real: la indica hPanel
-npm install                              # si node_modules no quedó en el deploy automático
-npm run db:seed                          # crea/actualiza admin + importa catálogo
+mysql -u root -e "CREATE DATABASE jaguar_seed_tmp CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+mysql -u root jaguar_seed_tmp < db/schema.sql
+# NODE_ENV=production para que NO cree el cliente de prueba; ADMIN_* son desechables
+NODE_ENV=production DB_NAME=jaguar_seed_tmp DB_USER=root ADMIN_EMAIL=temp@example.com ADMIN_PASSWORD=temporal123 \
+  JWT_SECRET=<32+ caracteres> MP_ACCESS_TOKEN=x MP_WEBHOOK_SECRET=x SMTP_HOST=x SMTP_PORT=465 SMTP_USER=x SMTP_PASSWORD=x SMTP_FROM=x \
+  npx tsx server/seed.ts
+mysqldump -u root --no-create-info --skip-lock-tables --skip-add-locks --no-tablespaces --set-gtid-purged=OFF \
+  --complete-insert jaguar_seed_tmp products experiences haciendas courses slides > jaguar-catalogo.sql
+mysql -u root -e "DROP DATABASE jaguar_seed_tmp"
 ```
 
-`npm run db:seed` es **idempotente** — se puede correr varias veces sin
-duplicar datos: crea o actualiza el admin (desde `ADMIN_EMAIL`/`ADMIN_PASSWORD`)
-e importa el catálogo real (26 productos, experiencias, haciendas, slides)
-leyendo `db.json` del repo.
+Comprueba que `https://[dominio]/api/productos` devuelva los productos.
 
-> **Sobre las variables de Mercado Pago:** todas se leen en **runtime** (no hay
-> ninguna `VITE_*` de pagos — Checkout Pro redirige a `init_point` y no necesita
-> Public Key en el frontend), así que cambiarlas solo requiere **Restart**.
+### 5.4 Crear el administrador
 
-### 5.5 Arrancar / reiniciar la app
+Así la contraseña del admin no pasa por variables de entorno, ni por el seed, ni por nadie más:
 
-El proceso escucha en `process.env.PORT` (lo inyecta hPanel). Tras un cambio
-de variables de entorno, o si necesitas forzar un reinicio, usa el botón
-**Restart** sobre el badge "Running" del panel de la app en hPanel. En
-producción sirve los estáticos de `dist/` y hace fallback SPA a `index.html`
-para cualquier ruta del frontend.
+1. Regístrate en `https://[dominio]/auth/registro` con el correo que va a administrar.
+2. En phpMyAdmin, pestaña **SQL**, ejecuta `UPDATE users SET rol = 'admin' WHERE email = '<ese correo>';`. Debe decir "1 fila afectada".
+3. Cierra sesión y vuelve a entrar, porque el rol se carga al iniciar sesión. `/admin` ya debe abrir.
 
-### 5.6 Ambiente de staging
+Los siguientes admins no necesitan phpMyAdmin: se registran y un admin les cambia el rol en **Admin → Usuarios**.
 
-Recomendado: una **segunda app Node.js** en el mismo hosting (el plan Business
-permite hasta 5), apuntando a un **subdominio** (ej. `staging.tudominio.com`)
-y a una **base de datos MySQL separada** (ej. `u123_jaguar_staging`) — así
-nunca se mezcla con los datos reales de producción.
+### 5.5 Reiniciar la app
 
-Checklist para levantarlo:
-
-1. **hPanel → Dominios** (o el panel del sitio) → crea el subdominio
-   `staging.tudominio.com`.
-2. **hPanel → Bases de datos MySQL** → crea una DB nueva para staging (no
-   reutilices la de producción).
-3. **hPanel → Avanzado → SSH Access** → actívalo si no lo está — se necesita
-   para importar `schema.sql` y correr el seed (§5.4).
-4. **hPanel → Websites → Add Website → Node.js web app** → conecta el mismo
-   repo de GitHub, pero puede apuntar a otra rama (ej. `staging`) si quieres
-   desacoplar despliegues, o a `master` si vas a probar exactamente lo que irá
-   a producción. Asigna el subdominio del paso 1.
-5. Variables de entorno propias de este ambiente:
-   - `APP_URL=https://staging.tudominio.com` (crítico: CORS y el link del
-     correo de recuperación de contraseña se generan con esta variable).
-   - `NODE_ENV=production` (staging corre el mismo código que producción; lo
-     que lo distingue es el dominio y la base de datos, no `NODE_ENV`).
-   - `DB_*` apuntando a la base de datos de staging del paso 2.
-   - `MP_*` con las credenciales de **prueba** de la app de Mercado Pago (y la URL de webhook en *modo prueba*).
-   - `SMTP_*` reales (hPanel → Correos → crear cuenta, ej.
-     `noreply@tudominio.com`) — son obligatorias porque `NODE_ENV=production`
-     lo exige (ver `server/config/env.ts`); puede ser la misma cuenta de correo
-     que usará producción.
-   - `JWT_SECRET` **distinto** al que usará producción (genera uno nuevo con
-     el comando del §4 — nunca reutilices secretos entre ambientes).
-6. Importa `schema.sql` y corre `npm run db:seed` contra la DB de staging (§5.4).
-7. Verifica con el checklist del §6, pero contra `https://staging.tudominio.com`.
+Después de cambiar una variable de entorno, por ejemplo al cargar las credenciales reales de Mercado Pago, usa **Redistribuir** con "Usa archivos anteriores", o el reinicio del panel. Todas las variables se leen en runtime: no hay variables `VITE_*`, así que no hace falta recompilar por un cambio de variables. En producción la app sirve `dist/` y hace fallback SPA a `index.html`.
 
 ---
 
@@ -263,8 +198,10 @@ curl https://tudominio.com/api/productos        # -> lista de productos (JSON)
 Checklist manual:
 
 - [ ] Abre el sitio, navega el catálogo, agrega productos al carrito.
-- [ ] Entra a `/admin` con `ADMIN_EMAIL` / `ADMIN_PASSWORD` y verifica que
+- [ ] Entra a `/admin` con el admin creado en §5.4 y verifica que
       carguen productos, órdenes, mensajes, slides y reservas.
+- [ ] Pide "¿Olvidaste tu clave?" con el correo del admin y confirma que el
+      correo llega (prueba real del SMTP).
 - [ ] Crea/edita un producto de prueba desde el panel y confirma que aparece
       en la tienda.
 - [ ] Prueba un checkout completo con las credenciales de Mercado Pago que
@@ -296,8 +233,8 @@ npm run dev                 # http://localhost:3000 (Vite + API en un solo proce
 
 ## 8. Cómo usar la aplicación (panel Admin)
 
-Entra a `https://tudominio.com/admin` con las credenciales de `ADMIN_EMAIL` /
-`ADMIN_PASSWORD` (o las que hayas creado luego desde MySQL/seed). El panel
+Entra a `https://tudominio.com/admin` con una cuenta de rol `admin`. En
+producción se crea como en §5.4; en local la crea `npm run db:seed` con `ADMIN_*`. El panel
 tiene 9 pestañas (`src/pages/Admin.tsx`):
 
 | Pestaña | Qué se hace ahí | Endpoint detrás |
@@ -368,27 +305,18 @@ de chat propia en este repo, n8n aloja y sirve la interfaz completa.
 
 ## 9. Cómo actualizar el sitio ya desplegado
 
-Para cualquier cambio de código después del primer deploy:
+Esta cuenta de Hostinger no tiene auto-deploy desde GitHub. Cada cambio de código se despliega así:
 
-```bash
-git pull origin master        # o el mecanismo de deploy de hPanel si usas Git integrado
-npm ci                        # solo si cambiaron dependencias (package-lock.json)
-npm run build                 # recompila frontend + server
-# Restart en hPanel → Node.js app
-```
+1. Commitea el cambio. El zip solo incluye lo commiteado.
+2. Ejecuta `npm run deploy:zip`, que genera `../jaguar-deploy.zip`.
+3. En hPanel: *Sitios web → [dominio] → **Redistribuir** → Subir archivos nuevos* → elige el zip. La configuración y las variables se conservan. Revisa que el archivo de entrada siga siendo `dist/server.cjs` y pulsa **Desplegar**.
+4. Comprueba `/api/health` y la parte que cambiaste.
 
-Si el cambio incluye una modificación a `db/schema.sql` (nueva tabla/columna),
-hay que aplicarla manualmente en producción **antes** del restart — no hay un
-sistema de migraciones, así que cualquier `ALTER TABLE` se corre a mano por
-phpMyAdmin o SSH.
+Si el cambio modifica `db/schema.sql` (tabla o columna nueva), aplica el `ALTER TABLE` en phpMyAdmin **antes** de redistribuir. No hay sistema de migraciones.
 
-Si el cambio toca cualquier variable
-`VITE_*`, hace falta un `npm run build` nuevo — cambiar solo la variable en
-hPanel y reiniciar **no** es suficiente (ver nota en §5.4).
+**Rollback:** en *Todos los despliegues* del tablero están los despliegues anteriores. Otra opción es hacer `git checkout <commit bueno>`, generar el zip y redistribuir.
 
-**Rollback:** si algo sale mal, `git checkout` al commit anterior (o
-`git revert`), `npm run build` de nuevo, y Restart. No hay downtime automático
-ni blue-green — el restart tarda lo que tarde Node en levantar.
+> ⚠️ **Pendiente de verificar:** hay que confirmar si `uploads/` (las imágenes subidas desde Admin) sobrevive a un redistribuir con archivos nuevos. Sube una imagen de prueba, redistribuye y comprueba que siga cargando (§12).
 
 ---
 
@@ -448,13 +376,18 @@ npm run test:e2e       # end-to-end, con el server corriendo aparte
    - Decisiones de producto pendientes (variables opcionales `MP_*`, §4): ¿excluir Efecty?, ¿tope de cuotas?, ¿vigencia del link de pago?, ¿enviar IVA (`taxes`)? — Mercado Pago asume 19% incluido si no se envía; consultar con el contador.
    - Guía completa de implementación, pruebas y salida a producción: `.claude/skills/mercadopago-checkout/`.
 
-2. **Backups de MySQL.** Configurar respaldos automáticos de la base de datos en Hostinger (hPanel suele tener esta opción en el panel de la base de datos).
+2. **CSP recortada por el CDN de Hostinger.** En `jaguarcoffeeco.com` la cabecera `Content-Security-Policy` llega como `upgrade-insecure-requests`, porque el CDN (`Server: hcdn`) reemplaza la política de Helmet. En local, el mismo build manda la política completa. Las demás cabeceras de seguridad sí llegan (HSTS, `X-Frame-Options`, `nosniff`, CORS restringido). Antes de producción hay que revisar la configuración del CDN o de seguridad en hPanel para que respete la CSP de la app, o pedírselo a soporte de Hostinger. Mientras tanto, la defensa contra XSS depende solo del código.
 
-3. **Cuenta de correo SMTP.** El envío real del correo de "recuperar contraseña" necesita una cuenta de correo creada en hPanel (ej. `noreply@tudominio.com`) y sus datos cargados en `SMTP_*` (§4). Sin esto, el link de recuperación solo queda impreso en el log del servidor.
+3. **Contraseña y dueño del admin.** El admin inicial (`noreply@jaguarcoffeeco.com`) tiene una contraseña genérica de pruebas. Antes de producción:
+   - Cambiarla desde *Mi Cuenta*.
+   - Registrar el correo del cliente y darle rol `admin` en *Admin → Usuarios*.
+   - Cambiar la contraseña no cierra las sesiones abiertas (duran hasta 7 días, el JWT no se revoca); ver mejora pendiente en la auditoría.
 
-4. **Persistencia de `uploads/` en Hostinger — sin confirmar (ver §8).** Las imágenes subidas desde el panel de Admin se guardan en disco local del servidor, no en git. Falta confirmar en el primer deploy real si esa carpeta sobrevive a un segundo deploy o se pierde. Si se pierde, evaluar mover el almacenamiento a un servicio externo (Cloudinary, S3-compatible) — la función `optimizeAndSaveImage` en `server/lib/uploads.ts` es el único punto a cambiar.
+4. **Backups de MySQL.** El tablero de la Web App muestra "Respaldos: Diariamente". Falta confirmar que incluyan la base de datos y probar una restauración.
 
-5. **`npm audit` marca vulnerabilidades en dependencias transitivas** (axios, mysql2, nanoid, postcss, entre otras) — ninguna introducida a propósito, son actualizaciones disponibles que no se han aplicado porque varias implican saltos de versión mayor (riesgo de breaking changes). Revisar con calma antes de actualizar en bloque.
+5. **Persistencia de `uploads/` en Hostinger — sin confirmar (ver §8 y §9).** Las imágenes subidas desde el panel de Admin se guardan en disco local del servidor, no en git. Falta confirmar en el primer deploy real si esa carpeta sobrevive a un segundo deploy o se pierde. Si se pierde, evaluar mover el almacenamiento a un servicio externo (Cloudinary, S3-compatible) — la función `optimizeAndSaveImage` en `server/lib/uploads.ts` es el único punto a cambiar.
+
+6. **`npm audit`: vulnerabilidades en dependencias.** El build de Hostinger reporta 13 (7 altas). Las relevantes en runtime son `nodemailer` (alta; ahora el SMTP ya está activo), `react-router-dom` (alta), y `express`, `mysql2` y `axios` (moderadas). No se han aplicado porque varias implican saltos de versión mayor. Hay que actualizarlas en una rama aparte, correr `npm test` y `npx playwright test`, y redistribuir antes de recibir pagos reales.
 
 ---
 

@@ -20,7 +20,8 @@
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:ui": "playwright test --ui",
     "test:all": "npm run test && npm run test:e2e",
-    "db:seed": "tsx server/seed.ts"
+    "db:seed": "tsx server/seed.ts",
+    "deploy:zip": "node scripts/deploy-zip.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
