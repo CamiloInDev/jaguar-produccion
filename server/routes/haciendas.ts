@@ -3,6 +3,7 @@ import { dbService } from '../db';
 import { authenticateToken, requireRole } from '../middleware/auth';
 import { haciendaValidation, handleValidationErrors } from '../middleware/validate';
 import { deleteUploadedFile } from '../lib/uploads';
+import { internalError } from '../middleware/errorHandler';
 
 const router = Router();
 
@@ -22,7 +23,7 @@ router.get('/all', authenticateToken, requireRole('admin', 'editor'), async (_re
     return res.json(haciendas || []);
   } catch (err: any) {
     console.error('[API /haciendas/all GET]', err);
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 
@@ -33,7 +34,7 @@ router.get('/:slug', async (req, res) => {
     return res.json(hacienda);
   } catch (err: any) {
     console.error('[API /haciendas/:slug GET]', err);
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 
@@ -63,7 +64,7 @@ router.post('/', authenticateToken, requireRole('admin', 'editor'), haciendaVali
     });
     return res.status(201).json({ success: true, message: 'Estadía creada exitosamente.' });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 
@@ -98,7 +99,7 @@ router.put('/:id', authenticateToken, requireRole('admin', 'editor'), haciendaVa
     }
     return res.json({ success: true, message: 'Estadía actualizada exitosamente.' });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 
@@ -112,7 +113,7 @@ router.delete('/:id', authenticateToken, requireRole('admin', 'editor'), async (
     }
     return res.json({ success: true, message: 'Estadía eliminada.' });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 

@@ -3,6 +3,7 @@ import { dbService } from '../db';
 import { authenticateToken, requireRole } from '../middleware/auth';
 import { experienceValidation, handleValidationErrors } from '../middleware/validate';
 import { deleteUploadedFile } from '../lib/uploads';
+import { internalError } from '../middleware/errorHandler';
 
 const router = Router();
 
@@ -10,7 +11,7 @@ router.get('/', async (_req, res) => {
   try {
     return res.json(await dbService.getExperiences());
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 
@@ -20,7 +21,7 @@ router.get('/:slug', async (req, res) => {
     if (!exp) return res.status(404).json({ error: 'Experiencia no encontrada.' });
     return res.json(exp);
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 
@@ -42,7 +43,7 @@ router.post('/', authenticateToken, requireRole('admin', 'editor'), experienceVa
     });
     return res.status(201).json({ success: true, message: 'Experiencia creada.' });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 
@@ -69,7 +70,7 @@ router.put('/:id', authenticateToken, requireRole('admin', 'editor'), experience
     }
     return res.json({ success: true, message: 'Experiencia actualizada exitosamente.' });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 
@@ -83,7 +84,7 @@ router.delete('/:id', authenticateToken, requireRole('admin', 'editor'), async (
     }
     return res.json({ success: true, message: 'Experiencia eliminada.' });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 

@@ -58,24 +58,25 @@ export default function CheckoutPage() {
 
     setLoading(true);
     try {
-      // 1. Pide al backend la referencia + firma de integridad (nunca se calcula en el cliente)
-      const prepRes = await axios.post('/api/ordenes/preparar-pago', { total });
+      // El precio/total nunca se calcula ni se confía desde el cliente: el backend
+      // recalcula ambos a partir del precio real de cada producto en la base de datos
+      // (ver server/routes/orders.ts#verifyCartItems). Aquí solo se envían product_id + cantidad.
+      const checkoutItems = items.map(item => ({
+        product_id: item.product_id,
+        cantidad: item.cantidad,
+      }));
+
+      // 1. Pide al backend la referencia + firma de integridad (el monto lo calcula el
+      // backend con el precio real de cada producto, nunca se calcula en el cliente)
+      const prepRes = await axios.post('/api/ordenes/preparar-pago', { items: checkoutItems });
       const { reference, signature, amount, currency, publicKey } = prepRes.data;
 
       // 2. Crea la orden como 'pendiente' ANTES de abrir el widget: algunos medios de pago
       // (PSE, transferencias) redirigen el navegador directo a redirectUrl sin pasar por el
       // callback de abajo, así que la orden debe existir de antemano para esa ruta también.
-      const checkoutItems = items.map(item => ({
-        product_id: item.product_id,
-        nombre: item.product?.nombre || 'Producto',
-        precio_unit: item.product?.precio || 0,
-        cantidad: item.cantidad
-      }));
-
       await axios.post('/api/ordenes/checkout', {
         reference,
         items: checkoutItems,
-        total,
         direccion_envio: address,
         notas
       });

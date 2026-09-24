@@ -5,7 +5,8 @@ import { env } from '../config/env';
 import { authenticateToken, requireRole, requireAdmin, AuthenticatedRequest } from '../middleware/auth';
 import { checkoutRateLimiter } from '../middleware/rateLimiter';
 import { orderStatusValidation, handleValidationErrors } from '../middleware/validate';
-import { OrderStatus } from '../../src/types';
+import { internalError } from '../middleware/errorHandler';
+import { OrderStatus, OrderItem } from '../../src/types';
 
 const router = Router();
 
@@ -16,6 +17,43 @@ const WOMPI_BASE_URL = env.VITE_WOMPI_PUBLIC_KEY.startsWith('pub_prod_')
 function generateWompiSignature(reference: string, amountInCents: number, currency: string) {
   const concat = reference + amountInCents + currency + env.WOMPI_INTEGRITY_KEY;
   return crypto.createHash('sha256').update(concat).digest('hex');
+}
+
+/**
+ * Recalcula ítems y total desde el precio REAL en la tabla `products`,
+ * ignorando cualquier precio/total que venga del cliente.
+ *
+ * El carrito (nombre, precio_unit, total) vive en el cliente y NUNCA debe
+ * tratarse como fuente de verdad: sin esta verificación, cualquiera podía
+ * manipular el request de /preparar-pago o /checkout para que Wompi cobrara
+ * (y quedara registrado en la orden) un monto arbitrario, distinto del precio
+ * real del producto — ej. pagar $1 por un carrito de $500.000.
+ */
+async function verifyCartItems(
+  rawItems: unknown
+): Promise<{ items: OrderItem[]; total: number } | { error: string }> {
+  if (!Array.isArray(rawItems) || rawItems.length === 0) {
+    return { error: 'El carrito está vacío o es inválido.' };
+  }
+  const items: OrderItem[] = [];
+  let total = 0;
+  for (const raw of rawItems) {
+    const productId = raw?.product_id;
+    const cantidad = Number(raw?.cantidad);
+    if (typeof productId !== 'string' || !productId || !Number.isInteger(cantidad) || cantidad < 1) {
+      return { error: 'Ítem de carrito inválido.' };
+    }
+    const product = await dbService.getProductById(productId);
+    if (!product || !product.activo) {
+      return { error: `El producto "${productId}" ya no está disponible.` };
+    }
+    if (product.stock < cantidad) {
+      return { error: `Stock insuficiente para "${product.nombre}" (disponible: ${product.stock}).` };
+    }
+    items.push({ product_id: product.id, nombre: product.nombre, precio_unit: product.precio, cantidad });
+    total += product.precio * cantidad;
+  }
+  return { items, total };
 }
 
 /** Los tokens de aceptación de T&C / datos personales los emite Wompi; no se pueden inventar localmente. */
@@ -37,13 +75,13 @@ async function fetchWompiAcceptanceTokens(): Promise<{ acceptanceToken: string; 
 
 router.post('/preparar-pago', authenticateToken, checkoutRateLimiter, async (req: AuthenticatedRequest, res) => {
   try {
-    const { total } = req.body;
-    if (!total || isNaN(total)) {
-      return res.status(400).json({ error: 'Monto total no válido.' });
+    const verified = await verifyCartItems(req.body?.items);
+    if ('error' in verified) {
+      return res.status(400).json({ error: verified.error });
     }
 
     const reference = `ORDER-${req.user!.id}-${Date.now()}`;
-    const amountInCents = Math.round(total * 100);
+    const amountInCents = Math.round(verified.total * 100);
     const currency = 'COP';
     const signature = generateWompiSignature(reference, amountInCents, currency);
     const { acceptanceToken, personalDataAuthToken } = await fetchWompiAcceptanceTokens();
@@ -65,25 +103,30 @@ router.post('/preparar-pago', authenticateToken, checkoutRateLimiter, async (req
 
 router.post('/checkout', authenticateToken, checkoutRateLimiter, async (req: AuthenticatedRequest, res) => {
   try {
-    const { reference, wompiTransactionId, items, total, direccion_envio, notas } = req.body;
-    if (!reference || !items || !total || !direccion_envio) {
+    const { reference, wompiTransactionId, items, direccion_envio, notas } = req.body;
+    if (!reference || !items || !direccion_envio) {
       return res.status(400).json({ error: 'Datos de facturación o productos insuficientes.' });
+    }
+
+    const verified = await verifyCartItems(items);
+    if ('error' in verified) {
+      return res.status(400).json({ error: verified.error });
     }
 
     const newOrder = await dbService.createOrder({
       id: reference,
       user_id: req.user!.id,
       estado: 'pendiente',
-      total: Number(total),
+      total: verified.total,
       wompi_transaction_id: wompiTransactionId || `Wmp-${Date.now()}`,
       direccion_envio,
       notas: notas || '',
-      items,
+      items: verified.items,
     });
 
     return res.status(201).json({ success: true, order: newOrder });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 
@@ -92,7 +135,7 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res) => {
     const orders = await dbService.getUserOrders(req.user!.id);
     return res.json(orders);
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 
@@ -100,7 +143,7 @@ router.get('/todas', authenticateToken, requireRole('admin', 'support'), async (
   try {
     return res.json(await dbService.getOrders());
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 
@@ -113,7 +156,7 @@ router.put('/:id/estado', authenticateToken, requireRole('admin', 'support'), or
     }
     return res.json({ success: true, order: updated });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 
@@ -134,7 +177,7 @@ if (env.NODE_ENV !== 'production') {
 
       return res.json({ success: true, status: updated.estado, message: `Webhook de prueba recibido. Estado cambiado a: ${updated.estado}` });
     } catch (err: any) {
-      return res.status(500).json({ error: err.message });
+      return internalError(res, err);
     }
   });
 }

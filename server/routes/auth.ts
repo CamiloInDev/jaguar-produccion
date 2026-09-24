@@ -5,6 +5,7 @@ import { env } from '../config/env';
 import { sendPasswordResetEmail } from '../config/mailer';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
 import { authRateLimiter } from '../middleware/rateLimiter';
+import { internalError } from '../middleware/errorHandler';
 import {
   registerValidation, loginValidation, profileUpdateValidation,
   requestPasswordResetValidation, resetPasswordValidation, changePasswordValidation,
@@ -13,6 +14,15 @@ import {
 
 /** Rutas de autenticación: registro, login, logout, perfil, recuperación */
 const router = Router();
+
+/**
+ * Hash bcrypt fijo (sin contraseña real detrás) usado únicamente para que
+ * `comparePassword` tarde lo mismo cuando el email NO existe que cuando existe
+ * pero la contraseña es incorrecta. Sin esto, un atacante podría enumerar
+ * emails registrados midiendo el tiempo de respuesta (el compare de bcrypt
+ * solo se ejecutaba si el usuario existía).
+ */
+const TIMING_SAFE_DUMMY_HASH = '$2b$12$9AeI1LvPvLNns1ctKyfRXOv9BvKV4bTm7xUfjHBSwR8//h75rvWZW';
 
 const JWT_OPTIONS = {
   expiresIn: 604800, // 7 días en segundos
@@ -56,7 +66,7 @@ router.post('/registro', authRateLimiter, registerValidation, handleValidationEr
 
     return res.status(201).json({ user });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 
@@ -73,7 +83,10 @@ router.post('/login', authRateLimiter, loginValidation, handleValidationErrors, 
     }
 
     const user = await dbService.getUserByEmail(email);
-    if (!user || !comparePassword(password, user.password_hash)) {
+    // Siempre se ejecuta comparePassword (contra un hash real o el dummy) para
+    // que el tiempo de respuesta no revele si el email existe o no.
+    const passwordOk = comparePassword(password, user ? user.password_hash : TIMING_SAFE_DUMMY_HASH);
+    if (!user || !passwordOk) {
       const remaining = await dbService.recordFailedLogin(email);
       console.log(`[SECURITY] Failed login for ${email}`);
       return res.status(400).json({
@@ -95,7 +108,7 @@ router.post('/login', authRateLimiter, loginValidation, handleValidationErrors, 
     const { password_hash, ...safeUser } = user;
     return res.json({ user: safeUser });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 
@@ -112,7 +125,7 @@ router.get('/me', authenticateToken, async (req: AuthenticatedRequest, res) => {
     }
     return res.json({ user: safeUser });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 
@@ -125,7 +138,7 @@ router.put('/perfil', authenticateToken, profileUpdateValidation, handleValidati
     }
     return res.json({ user: updated });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 
@@ -185,7 +198,7 @@ router.put('/password', authenticateToken, changePasswordValidation, handleValid
     await dbService.updateUserPassword(user.id, hashPassword(newPassword));
     return res.json({ success: true, message: 'Contraseña actualizada correctamente.' });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 

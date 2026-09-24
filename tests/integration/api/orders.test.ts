@@ -32,16 +32,16 @@ async function getUserCookies() {
 }
 
 describe('POST /api/ordenes/preparar-pago', () => {
-  it('prepares payment signature when authenticated', async () => {
+  it('prepares payment signature when authenticated, using the real product price', async () => {
     const cookies = await getUserCookies();
     const res = await request(app)
       .post('/api/ordenes/preparar-pago')
       .set('Cookie', cookies)
-      .send({ total: 50000 });
+      .send({ items: [{ product_id: 'prod_1', cantidad: 2 }] });
     expect(res.status).toBe(200);
     expect(res.body.reference).toBeTruthy();
     expect(res.body.signature).toBeTruthy();
-    expect(res.body.amount).toBe(5000000);
+    expect(res.body.amount).toBe(5000000); // prod_1.precio (25000) * 2 * 100
     expect(res.body.currency).toBe('COP');
     expect(res.body.publicKey).toBeTruthy();
   });
@@ -49,17 +49,29 @@ describe('POST /api/ordenes/preparar-pago', () => {
   it('returns 401 when not authenticated', async () => {
     const res = await request(app)
       .post('/api/ordenes/preparar-pago')
-      .send({ total: 50000 });
+      .send({ items: [{ product_id: 'prod_1', cantidad: 2 }] });
     expect(res.status).toBe(401);
   });
 
-  it('rejects invalid total', async () => {
+  it('rejects an empty or invalid cart', async () => {
     const cookies = await getUserCookies();
     const res = await request(app)
       .post('/api/ordenes/preparar-pago')
       .set('Cookie', cookies)
-      .send({ total: 'invalid' });
+      .send({ items: [] });
     expect(res.status).toBe(400);
+  });
+
+  it('ignores a client-supplied price and recomputes it from the product table', async () => {
+    // Regression test: /preparar-pago used to trust a client-supplied `total`
+    // directly, so a tampered request could sign a Wompi charge for any amount.
+    const cookies = await getUserCookies();
+    const res = await request(app)
+      .post('/api/ordenes/preparar-pago')
+      .set('Cookie', cookies)
+      .send({ total: 1, items: [{ product_id: 'prod_1', cantidad: 2 }] });
+    expect(res.status).toBe(200);
+    expect(res.body.amount).toBe(5000000); // real price, NOT the tampered total: 1
   });
 });
 
@@ -86,6 +98,38 @@ describe('POST /api/ordenes/checkout', () => {
       .post('/api/ordenes/checkout')
       .send({ reference: 'ORDER-UNATH', items: [], total: 0, direccion_envio: { direccion: 'X', ciudad: 'Y', departamento: 'Z', telefono: '000' } });
     expect(res.status).toBe(401);
+  });
+
+  it('ignores a tampered precio_unit/total and stores the real product price instead', async () => {
+    // Regression test: /checkout used to persist whatever `precio_unit`/`total`
+    // the client sent, so a tampered request could record (and later charge)
+    // an order at an arbitrary price instead of the real one in `products`.
+    const cookies = await getUserCookies();
+    const res = await request(app)
+      .post('/api/ordenes/checkout')
+      .set('Cookie', cookies)
+      .send({
+        reference: 'ORDER-TAMPERED-PRICE',
+        items: [{ product_id: 'prod_1', nombre: 'Test Product', precio_unit: 1, cantidad: 2 }],
+        total: 1,
+        direccion_envio: { direccion: 'Calle 123', ciudad: 'Bogotá', departamento: 'Cundinamarca', telefono: '3000000000' },
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.order.total).toBe(50000); // prod_1.precio (25000) * 2, NOT the tampered 1
+    expect(res.body.order.items[0].precio_unit).toBe(25000);
+  });
+
+  it('rejects an order for a product without enough stock', async () => {
+    const cookies = await getUserCookies();
+    const res = await request(app)
+      .post('/api/ordenes/checkout')
+      .set('Cookie', cookies)
+      .send({
+        reference: 'ORDER-NO-STOCK',
+        items: [{ product_id: 'prod_1', nombre: 'Test Product', precio_unit: 25000, cantidad: 999 }],
+        direccion_envio: { direccion: 'Calle 123', ciudad: 'Bogotá', departamento: 'Cundinamarca', telefono: '3000000000' },
+      });
+    expect(res.status).toBe(400);
   });
 });
 

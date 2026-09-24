@@ -3,6 +3,7 @@ import { dbService } from '../db';
 import { authenticateToken, requireRole } from '../middleware/auth';
 import { courseValidation, handleValidationErrors } from '../middleware/validate';
 import { deleteUploadedFile } from '../lib/uploads';
+import { internalError } from '../middleware/errorHandler';
 
 const router = Router();
 
@@ -22,7 +23,7 @@ router.get('/all', authenticateToken, requireRole('admin', 'editor'), async (_re
     return res.json(courses || []);
   } catch (err: any) {
     console.error('[API /cursos/all GET]', err);
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 
@@ -33,7 +34,7 @@ router.get('/:slug', async (req, res) => {
     return res.json(course);
   } catch (err: any) {
     console.error('[API /cursos/:slug GET]', err);
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 
@@ -55,7 +56,7 @@ router.post('/', authenticateToken, requireRole('admin', 'editor'), courseValida
     });
     return res.status(201).json({ success: true, message: 'Curso creado exitosamente.' });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 
@@ -82,7 +83,7 @@ router.put('/:id', authenticateToken, requireRole('admin', 'editor'), courseVali
     }
     return res.json({ success: true, message: 'Curso actualizado exitosamente.' });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 
@@ -93,7 +94,7 @@ router.delete('/:id', authenticateToken, requireRole('admin', 'editor'), async (
     if (existing) await deleteUploadedFile(existing.imagen_url);
     return res.json({ success: true, message: 'Curso eliminado.' });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 

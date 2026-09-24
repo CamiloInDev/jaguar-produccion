@@ -590,6 +590,16 @@ export default function Admin() {
     }
   };
 
+  const handleDeleteMessage = async (msgId: string) => {
+    if (!confirm('¿Desea eliminar este mensaje de contacto? Esta acción no se puede deshacer.')) return;
+    try {
+      await axios.delete(`/api/contacto/${msgId}`);
+      loadData();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   // Metrics calculating
   const paidOrders = orders.filter(o => o.estado === 'pagado');
   const revenueTotal = paidOrders.reduce((sum, o) => sum + o.total, 0);
@@ -1064,6 +1074,13 @@ export default function Admin() {
                               Marcar como Leído
                             </button>
                           )}
+                          <button
+                            onClick={() => handleDeleteMessage(m.id)}
+                            className="p-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl text-rose-700 cursor-pointer"
+                            title="Eliminar mensaje"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </div>
 

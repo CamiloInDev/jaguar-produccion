@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { dbService } from '../db';
 import { authenticateToken, requireRole } from '../middleware/auth';
 import { reservationValidation, handleValidationErrors } from '../middleware/validate';
+import { internalError } from '../middleware/errorHandler';
 
 /** Rutas de reservas — público (POST crear, GET fechas ocupadas), admin/support (listar, cambiar estado) */
 const router = Router();
@@ -32,7 +33,7 @@ router.post('/', reservationValidation, handleValidationErrors, async (req, res)
 
     return res.status(201).json({ success: true, reservation });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 
@@ -49,7 +50,7 @@ router.get('/ocupadas', async (req, res) => {
     const dates = await dbService.getOccupiedDates(tipo as 'academia' | 'estadia', item_id);
     return res.json({ dates });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 
@@ -58,7 +59,7 @@ router.get('/', authenticateToken, requireRole('admin', 'support'), async (_req,
   try {
     return res.json(await dbService.getReservations());
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 
@@ -75,7 +76,7 @@ router.put('/:id/estado', authenticateToken, requireRole('admin', 'support'), as
     }
     return res.json({ success: true, reservation: updated });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 

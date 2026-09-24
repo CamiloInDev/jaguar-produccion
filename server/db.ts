@@ -531,6 +531,11 @@ export const dbService = {
     await pool.query('UPDATE contact_messages SET respondido = 1 WHERE id = ?', [id]);
   },
 
+  async deleteContactMessage(id: string): Promise<boolean> {
+    const [res] = await pool.query<ResultSetHeader>('DELETE FROM contact_messages WHERE id = ?', [id]);
+    return res.affectedRows > 0;
+  },
+
   // --------------------------------------------------------------------------
   // Orders
   // --------------------------------------------------------------------------

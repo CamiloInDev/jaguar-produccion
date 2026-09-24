@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { dbService } from '../db';
 import { authenticateToken, requireAdmin, AuthenticatedRequest } from '../middleware/auth';
 import { roleUpdateValidation, handleValidationErrors } from '../middleware/validate';
+import { internalError } from '../middleware/errorHandler';
 
 const router = Router();
 
@@ -10,7 +11,7 @@ router.get('/', authenticateToken, requireAdmin, async (_req: AuthenticatedReque
     const users = await dbService.getAllUsers();
     return res.json(users);
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 
@@ -28,7 +29,7 @@ router.put('/:id/rol', authenticateToken, requireAdmin, roleUpdateValidation, ha
     }
     return res.json({ success: true, user: updated });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 
@@ -44,7 +45,7 @@ router.delete('/:id', authenticateToken, requireAdmin, async (req: Authenticated
     }
     return res.json({ success: true, message: 'Usuario eliminado.' });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message });
+    return internalError(res, err);
   }
 });
 
