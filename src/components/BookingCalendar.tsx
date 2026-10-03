@@ -139,13 +139,14 @@ export default function BookingCalendar({
   };
 
   return (
-    <div className="bg-white border border-[#122C9B]/10 rounded-2xl p-6 shadow-sm">
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="font-display text-lg font-bold text-[#122C9B] flex items-center gap-2">
+    <div className="bg-white border border-[#122C9B]/10 rounded-2xl p-4 sm:p-6 shadow-sm">
+      {/* flex-wrap: en pantallas angostas el selector de mes baja a su propia línea en vez de desbordar */}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mb-6">
+        <h3 className="font-display text-base sm:text-lg font-bold text-[#122C9B] flex items-center gap-2">
           <CalendarIcon className="w-5 h-5 text-[#FFA42C]" />
           <span>Selecciona una fecha</span>
         </h3>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 ml-auto">
           <button
             onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
             className="p-2 hover:bg-[#FFF9F5] rounded-lg transition-colors text-[#122C9B]"
@@ -153,7 +154,7 @@ export default function BookingCalendar({
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <span className="text-sm font-bold text-[#122C9B] min-w-[120px] text-center">
+          <span className="text-sm font-bold text-[#122C9B] min-w-[7rem] text-center capitalize">
             {format(currentMonth, 'MMMM yyyy', { locale: es })}
           </span>
           <button

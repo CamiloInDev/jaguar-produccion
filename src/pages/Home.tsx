@@ -49,75 +49,102 @@ export default function Home() {
   return (
     <div id="home-view" className="space-y-16 pb-20">
       
-      {/* 1. HERO CAROUSEL PORTAL */}
-      <div id="hero-carousel" className="relative h-[560px] md:h-[620px] bg-[#122C9B] overflow-hidden">
+      {/* 1. HERO CAROUSEL PORTAL
+          Alto relativo a la pantalla (descontando los 5rem del navbar) con mínimo y máximo:
+          llena el celular en vertical, no se corta en celular horizontal y no queda corto en
+          monitores grandes. En pantallas bajas (celular horizontal) todo se compacta. */}
+      <section
+        id="hero-carousel"
+        aria-roledescription="carrusel"
+        aria-label="Destacados"
+        className="relative h-[calc(100svh-5rem)] min-h-[30rem] max-h-[56rem] [@media(max-height:500px)]:min-h-[17rem] bg-[#122C9B] overflow-hidden"
+      >
         {slides && slides.length > 0 ? slides.map((slide, idx) => (
           <div
             key={idx}
+            aria-hidden={currentSlide !== idx}
             className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
-              currentSlide === idx ? 'opacity-100 z-10' : 'opacity-0 z-0'
+              currentSlide === idx ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
             }`}
           >
-            {/* Background Graphic */}
-            <div
-              className="absolute inset-0 bg-cover bg-center mix-blend-multiply opacity-80 transform scale-105 transition-transform duration-[6000ms]"
-              style={{ backgroundImage: `url(${slide.bgImage})` }}
+            {/* Imagen de fondo como <img>: el navegador la descubre antes que un background CSS
+                (mejor LCP) y object-cover la recorta bien en cualquier proporción. La primera se
+                pide con prioridad; las demás, en diferido. */}
+            <img
+              src={slide.bgImage}
+              alt=""
+              loading={idx === 0 ? 'eager' : 'lazy'}
+              fetchPriority={idx === 0 ? 'high' : 'low'}
+              decoding="async"
+              className="absolute inset-0 w-full h-full object-cover object-[70%_center] md:object-center mix-blend-multiply opacity-80"
             />
-            {/* Ambient vignette */}
-            <div className="absolute inset-0 bg-gradient-to-t from-[#122C9B]/60 via-[#122C9B]/15 to-transparent" />
- 
+            {/* Velo para que el texto se lea sobre cualquier foto: de abajo hacia arriba en
+                celular (el texto ocupa casi todo el ancho) y desde la izquierda en pantallas anchas
+                (el texto va a la izquierda y la foto respira a la derecha). */}
+            <div className="absolute inset-0 bg-gradient-to-t from-[#122C9B]/90 via-[#122C9B]/55 to-[#122C9B]/20 md:bg-gradient-to-r md:from-[#122C9B]/90 md:from-25% md:via-[#122C9B]/55 md:via-55% md:to-transparent" />
+
             {/* Carousel Content */}
-            <div className="absolute inset-0 flex items-center justify-start max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 z-20">
-              <div className="max-w-2xl space-y-6 text-[#FFF9F5]">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#FFA42C] text-[#122C9B] rounded-2xl text-xs font-black font-mono tracking-widest uppercase">
+            <div className="relative z-20 h-full max-w-7xl mx-auto px-5 sm:px-6 lg:px-8 flex items-end md:items-center pb-20 md:pb-0 [@media(max-height:500px)]:items-center [@media(max-height:500px)]:pb-10">
+              <div className="w-full max-w-xl lg:max-w-2xl space-y-4 sm:space-y-6 [@media(max-height:500px)]:space-y-2 text-[#FFF9F5]">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#FFA42C] text-[#122C9B] rounded-2xl text-[10px] sm:text-xs font-black font-mono tracking-widest uppercase">
                   {slide.badge}
                 </span>
-                <h1 className="font-sans text-4xl sm:text-6xl font-extrabold tracking-tighter leading-[0.9] whitespace-pre-line">
-                  {slide.title}
-                </h1>
-                <p className="text-sm sm:text-base text-white font-medium leading-relaxed max-w-lg">
+                {/* Solo el slide visible es el <h1> de la página; los demás son <h2> */}
+                {React.createElement(
+                  currentSlide === idx ? 'h1' : 'h2',
+                  { className: 'font-sans text-[clamp(2.25rem,7vw,4.5rem)] [@media(max-height:500px)]:text-3xl font-extrabold tracking-tighter leading-[0.95] whitespace-pre-line text-balance' },
+                  slide.title
+                )}
+                <p className="text-sm sm:text-base lg:text-lg text-white font-medium leading-relaxed max-w-lg [@media(max-height:500px)]:line-clamp-2">
                   {slide.subtitle}
                 </p>
-                <div className="pt-4 flex items-center gap-4">
+                <div className="pt-2 sm:pt-4 [@media(max-height:500px)]:pt-1 flex flex-wrap items-center gap-3 sm:gap-4">
                   <Link
                     to={slide.buttonLink}
-                    className="px-8 py-3 bg-[#FFA42C] hover:bg-[#FFA42C]/90 text-[#122C9B] font-bold rounded-2xl text-xs uppercase tracking-widest shadow-lg shadow-[#FFA42C]/30 transition-all cursor-pointer"
+                    tabIndex={currentSlide === idx ? 0 : -1}
+                    className="px-6 sm:px-8 py-3 bg-[#FFA42C] hover:bg-[#FFA42C]/90 text-[#122C9B] font-bold rounded-2xl text-xs uppercase tracking-widest shadow-lg shadow-[#FFA42C]/30 transition-all cursor-pointer text-center"
                   >
                     {slide.buttonText}
                   </Link>
                   {slide.button2Text && (
                     <Link
                       to={slide.button2Link || '/'}
-                      className="px-8 py-3 border border-[#FFF9F5]/40 hover:border-white text-white font-bold rounded-2xl text-xs uppercase tracking-widest hover:bg-white/10 transition-all"
+                      tabIndex={currentSlide === idx ? 0 : -1}
+                      className="px-6 sm:px-8 py-3 border border-[#FFF9F5]/40 hover:border-white text-white font-bold rounded-2xl text-xs uppercase tracking-widest hover:bg-white/10 transition-all text-center"
                     >
                       {slide.button2Text}
                     </Link>
                   )}
                 </div>
               </div>
-</div>
+            </div>
           </div>
         )) : (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="w-12 h-12 border-4 border-[#FFA42C] border-t-transparent rounded-full animate-spin" />
           </div>
         )}
-  
-        {/* Carousel Slide Indicators */}
-        {slides && slides.length > 0 && (
-        <div className="absolute bottom-28 md:bottom-32 left-1/2 -translate-x-1/2 flex space-x-3 z-40">
-          {slides.map((_, idx) => (
+
+        {/* Indicadores: abajo, centrados, con área táctil de 24px aunque el punto se vea pequeño */}
+        {slides && slides.length > 1 && (
+        <div className="absolute bottom-5 sm:bottom-8 [@media(max-height:500px)]:bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1 z-40">
+          {slides.map((slide, idx) => (
             <button
               key={idx}
+              type="button"
               onClick={() => setCurrentSlide(idx)}
-              className={`w-3 h-3 rounded-2xl transition-all duration-300 ${
-                currentSlide === idx ? 'bg-[#FFA42C] w-8' : 'bg-white/30 hover:bg-white/60'
-              }`}
-            />
+              aria-label={`Ver destacado ${idx + 1}: ${slide.title.replace(/\n/g, ' ')}`}
+              aria-current={currentSlide === idx}
+              className="p-2 group cursor-pointer"
+            >
+              <span className={`block h-2.5 rounded-2xl transition-all duration-300 ${
+                currentSlide === idx ? 'bg-[#FFA42C] w-8' : 'w-2.5 bg-white/40 group-hover:bg-white/70'
+              }`} />
+            </button>
           ))}
         </div>
         )}
-      </div>
+      </section>
 
       {/* 2. VALUE PROPOSITIONS BENTO GRID */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -255,7 +282,7 @@ export default function Home() {
             <span className="inline-flex items-center gap-1 px-4 py-1.5 bg-[#FFA42C]/10 text-[#FFA42C] border border-[#FFA42C]/20 rounded-2xl text-[10px] font-mono font-black tracking-widest uppercase">
               SCA Premier Campus
             </span>
-            <h2 className="font-sans text-4xl font-extrabold text-[#FFF9F5] tracking-tighter uppercase leading-[0.9]">
+            <h2 className="font-sans text-[1.75rem] sm:text-4xl hyphens-auto [overflow-wrap:anywhere] sm:[overflow-wrap:normal] font-extrabold text-[#FFF9F5] tracking-tighter uppercase leading-[0.9]">
               Academia de Barismo con Certificaciones Internacionales
             </h2>
             <p className="text-[#FFF9F5]/70 font-light text-sm leading-relaxed">
@@ -399,12 +426,13 @@ export default function Home() {
 
       {/* 7. INSTAGRAM REEL SECTION */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-white border border-[#122C9B]/10 rounded-2xl p-8 md:p-12 shadow-sm">
+        <div className="bg-white border border-[#122C9B]/10 rounded-2xl p-5 sm:p-8 md:p-12 shadow-sm">
           <div className="text-center max-w-2xl mx-auto space-y-4 mb-8">
             <span className="px-3 py-1 bg-[#FFA42C]/10 text-[#122C9B] rounded-full text-xs font-bold font-mono tracking-wider uppercase">
               Síguenos en Instagram
             </span>
-            <h2 className="font-sans text-3xl font-extrabold text-[#122C9B] tracking-tight">
+            {/* Una sola "palabra" larga: el tamaño escala con el ancho para no desbordar en celular */}
+            <h2 className="font-sans text-[clamp(1.25rem,6.5vw,1.875rem)] font-extrabold text-[#122C9B] tracking-tight [overflow-wrap:anywhere]">
               @jaguarcoffeecolombia
             </h2>
             <p className="text-sm text-[#122C9B]/60 font-light">

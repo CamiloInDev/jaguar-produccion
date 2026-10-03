@@ -65,7 +65,7 @@ export default function Tienda() {
         
         <div className="space-y-3 max-w-xl z-10 relative">
           <span className="text-[#FFA42C] font-mono text-xs font-black uppercase tracking-widest">Tienda de Especialidad</span>
-          <h1 className="font-sans text-4xl font-extrabold tracking-tighter uppercase leading-[0.9]">Catálogo de Café Especial</h1>
+          <h1 className="font-sans text-[1.75rem] sm:text-4xl hyphens-auto [overflow-wrap:anywhere] sm:[overflow-wrap:normal] font-extrabold tracking-tighter uppercase leading-[0.9]">Catálogo de Café Especial</h1>
           <p className="text-sm text-[#FFF9F5]/80 font-light leading-relaxed">
             Nuestros granos son seleccionados a mano por caficultores colombianos expertos, garantizando un tueste perfecto y frescura sublime en la entrega.
           </p>
