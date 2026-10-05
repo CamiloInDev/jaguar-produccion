@@ -80,8 +80,9 @@ estáticos desde el mismo Express.
 
 > **Cómo funciona en esta cuenta** (confirmado en el primer despliegue, 2026-09-24):
 > - **No hay integración con GitHub.** La app se despliega **subiendo un `.zip`** del proyecto, y cada actualización es subir un zip nuevo (§9).
-> - Al recibir el zip, Hostinger corre `npm install` y `npm run build`, y arranca el *archivo de entrada* configurado.
-> - El panel **no deja definir el comando de build**: solo gestor de paquetes y archivo de entrada. Además, con `NODE_ENV=production` instala **solo** `dependencies`. Por eso todo lo que usa `npm run build` (vite, esbuild, plugins) debe estar en `dependencies`, no en `devDependencies`.
+> - Al recibir el zip, Hostinger **solo corre `npm install`** (el registro dice `Build command: none`) y arranca el *archivo de entrada* configurado. **No compila.** Por eso el zip lleva `dist/` ya compilado (confirmado 2026-10-05: un zip sin `dist/` falla con `ERROR: Entry file not found`).
+> - Con el preajuste Express, el panel **no deja definir el comando de build**: solo gestor de paquetes y archivo de entrada. Con `NODE_ENV=production` instala **solo** `dependencies`.
+> - Al redistribuir, revisa el **Preajuste del marco**: hPanel puede cambiarlo solo a *Create React App*, que espera una carpeta `build` y no arranca el servidor. Debe ser **Express**.
 > - Delante de la app hay un CDN de Hostinger (`Server: hcdn`) que **reemplaza la cabecera `Content-Security-Policy`** de la app por `upgrade-insecure-requests`. Ver §12.
 >
 > Fuentes: [Crear una app Node.js](https://docs.hostinger.com/node.js/creating-an-app) · [Conectar MySQL a Node.js](https://www.hostinger.com/support/connecting-a-hostinger-mysql-database-to-a-node-js-application/) · [Bases de datos](https://docs.hostinger.com/websites/databases)
@@ -135,7 +136,7 @@ Este es el orden que se siguió en el primer despliegue a `jaguarcoffeeco.com` (
 
 ### 5.2 Crear la Web App y desplegar
 
-1. **Genera el zip** desde el último commit con `npm run deploy:zip`. Queda en `../jaguar-deploy.zip`, sin `.env`, `node_modules/` ni `dist/`. Si hay cambios sin commitear, el script se detiene.
+1. **Genera el zip** desde el último commit con `npm run deploy:zip`. Compila con `npm run build` y deja en `../jaguar-deploy.zip` el código commiteado más `dist/`. `dist/` es la única excepción al `.gitignore`: nunca van `.env`, `node_modules/` ni `uploads/`. Si hay cambios sin commitear, el script se detiene.
 2. Ve a *Sitios web → Desplegar app Node.js*, elige el dominio y sube el zip.
 3. Configura la pantalla **"Revisa los ajustes de compilación"** así:
 
@@ -308,8 +309,8 @@ de chat propia en este repo, n8n aloja y sirve la interfaz completa.
 Esta cuenta de Hostinger no tiene auto-deploy desde GitHub. Cada cambio de código se despliega así:
 
 1. Commitea el cambio. El zip solo incluye lo commiteado.
-2. Ejecuta `npm run deploy:zip`, que genera `../jaguar-deploy.zip`.
-3. En hPanel: *Sitios web → [dominio] → **Redistribuir** → Subir archivos nuevos* → elige el zip. La configuración y las variables se conservan. Revisa que el archivo de entrada siga siendo `dist/server.cjs` y pulsa **Desplegar**.
+2. Ejecuta `npm run deploy:zip`, que compila y genera `../jaguar-deploy.zip` (código commiteado + `dist/`).
+3. En hPanel: *Sitios web → [dominio] → **Redistribuir** → Subir archivos nuevos* → elige el zip. La configuración y las variables se conservan, pero revisa que el preajuste siga en **Express** y el archivo de entrada en `dist/server.cjs` antes de pulsar **Desplegar**.
 4. Comprueba `/api/health` y la parte que cambiaste.
 
 Si el cambio modifica `db/schema.sql` (tabla o columna nueva), aplica el `ALTER TABLE` en phpMyAdmin **antes** de redistribuir. No hay sistema de migraciones. Cada `ALTER` queda documentado en la cabecera de `db/schema.sql`. Ejemplo: `token_version` (2026-09-24) se agrega con `ALTER TABLE users ADD COLUMN token_version INT NOT NULL DEFAULT 0 AFTER rol;`. Sin esa columna, cualquier petición con sesión falla.
