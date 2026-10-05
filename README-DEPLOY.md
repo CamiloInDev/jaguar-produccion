@@ -253,20 +253,17 @@ tiene 9 pestañas (`src/pages/Admin.tsx`):
 Todos los campos de imagen del panel (Productos, Slides, Estadías, Experiencias)
 tienen un botón **"Subir imagen"** que sube el archivo desde tu computador —
 se optimiza automáticamente en el servidor (resize a máx. 1600px + conversión a
-WebP calidad 80 vía `sharp`) y se guarda en `uploads/` (servido en `/uploads/...`).
+WebP calidad 80 vía `sharp`) y se guarda en la carpeta de uploads (servida en `/uploads/...`).
 El campo de texto para pegar una URL externa (ej. Unsplash) se mantiene como
 alternativa. **Cursos no tiene campo de imagen** (el diseño de Academia no
 muestra fotos por curso). Al borrar o reemplazar la imagen de un registro, el
 archivo viejo se borra automáticamente del servidor si era uno subido (nunca
 se borran URLs externas).
 
-> ⚠️ **Verificar en el primer deploy real a Hostinger:** `uploads/` es una
-> carpeta en disco local del servidor (no versionada en git). No está
-> confirmado si el proceso de deploy de Hostinger reconstruye la carpeta de la
-> app en cada push o solo hace `git pull` incremental — si reconstruye, las
-> imágenes subidas se perderían en el siguiente deploy. Antes de depender de
-> esto con contenido real del cliente: subir una imagen de prueba, hacer un
-> segundo deploy, y confirmar que la imagen sigue accesible.
+> **Dónde se guardan:** `./uploads` en desarrollo y **`~/jaguar-uploads`** en producción, fuera de la
+> carpeta de la app. Hostinger reemplaza la carpeta de la app en cada redistribución: con la versión anterior,
+> que guardaba en `./uploads`, las imágenes subidas se perdían (confirmado 2026-10-05). La variable opcional
+> `UPLOADS_DIR` fija otra ruta absoluta. Al arrancar, el log muestra `[uploads] Carpeta de imágenes: ...`.
 
 Roles disponibles (`server/middleware/auth.ts` → `requireRole`):
 
@@ -317,7 +314,7 @@ Si el cambio modifica `db/schema.sql` (tabla o columna nueva), aplica el `ALTER 
 
 **Rollback:** en *Todos los despliegues* del tablero están los despliegues anteriores. Otra opción es hacer `git checkout <commit bueno>`, generar el zip y redistribuir.
 
-> ⚠️ **Pendiente de verificar:** hay que confirmar si `uploads/` (las imágenes subidas desde Admin) sobrevive a un redistribuir con archivos nuevos. Sube una imagen de prueba, redistribuye y comprueba que siga cargando (§12).
+> Las imágenes subidas desde Admin se guardan en `~/jaguar-uploads`, fuera de la app, así que sobreviven a la redistribución (§8).
 
 ---
 
@@ -386,7 +383,7 @@ npm run test:e2e       # end-to-end, con el server corriendo aparte
 
 4. **Backups de MySQL.** El tablero de la Web App muestra "Respaldos: Diariamente". Falta confirmar que incluyan la base de datos y probar una restauración.
 
-5. **Persistencia de `uploads/` en Hostinger — sin confirmar (ver §8 y §9).** Las imágenes subidas desde el panel de Admin se guardan en disco local del servidor, no en git. Falta confirmar en el primer deploy real si esa carpeta sobrevive a un segundo deploy o se pierde. Si se pierde, evaluar mover el almacenamiento a un servicio externo (Cloudinary, S3-compatible) — la función `optimizeAndSaveImage` en `server/lib/uploads.ts` es el único punto a cambiar.
+5. **Persistencia de uploads en Hostinger.** Confirmado 2026-10-05: `./uploads` se perdía al redistribuir. Desde entonces en producción se guardan en `~/jaguar-uploads` (`server/lib/uploads.ts`). Falta confirmar en vivo que esa carpeta sobrevive a una redistribución. Si no, mover el almacenamiento a un servicio externo (Cloudinary, S3-compatible); `optimizeAndSaveImage` es el único punto a cambiar.
 
 6. **Resuelto 2026-09-24: `npm audit`.** Tras `npm audit fix` (sin saltos de versión mayor) quedan **0 vulnerabilidades en dependencias de producción**: nodemailer 9.1.1, react-router-dom 7.18.4, express 4.22.3 y mysql2 3.24.4. Solo quedan 4 moderadas en herramientas de test (vitest), que no se despliegan.
 

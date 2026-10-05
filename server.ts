@@ -163,9 +163,10 @@ app.get('/sitemap.xml', async (_req, res, next) => {
 });
 
 // -----------------------------------------------------------------------------
-// Archivos subidos por el admin (imágenes optimizadas) — mismo path en dev y prod
+// Archivos subidos por el admin (imágenes optimizadas). En producción viven fuera de la app (ver server/lib/uploads.ts)
 // -----------------------------------------------------------------------------
 ensureUploadsDir();
+console.log(`[uploads] Carpeta de imágenes: ${UPLOADS_DIR}`);
 app.use('/uploads', express.static(UPLOADS_DIR));
 
 // -----------------------------------------------------------------------------

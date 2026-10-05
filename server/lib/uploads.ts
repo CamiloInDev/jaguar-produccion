@@ -1,9 +1,23 @@
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import sharp from 'sharp';
 
-export const UPLOADS_DIR = path.join(process.cwd(), process.env.NODE_ENV === 'test' ? 'uploads_test' : 'uploads');
+/**
+ * Carpeta de las imágenes subidas desde Admin.
+ * En producción va FUERA de la carpeta de la app (~/jaguar-uploads): Hostinger reemplaza la carpeta
+ * de la app en cada redistribución y las imágenes guardadas dentro se pierden (confirmado 2026-10-05).
+ * UPLOADS_DIR permite fijar otra ruta absoluta.
+ */
+function resolveUploadsDir(): string {
+  if (process.env.UPLOADS_DIR) return path.resolve(process.env.UPLOADS_DIR);
+  if (process.env.NODE_ENV === 'test') return path.join(process.cwd(), 'uploads_test');
+  if (process.env.NODE_ENV === 'production') return path.join(os.homedir(), 'jaguar-uploads');
+  return path.join(process.cwd(), 'uploads');
+}
+
+export const UPLOADS_DIR = resolveUploadsDir();
 const UPLOADS_URL_PREFIX = '/uploads/';
 
 /** Crea la carpeta de uploads si no existe. Llamar una vez al arrancar el server. */
