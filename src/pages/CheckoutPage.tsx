@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, Navigate } from 'react-router-dom';
 import { useCartStore, useAuthStore } from '../store';
 import { CreditCard, MapPin, ClipboardList, ArrowLeft, Phone } from 'lucide-react';
 import axios from 'axios';
@@ -23,6 +23,12 @@ export default function CheckoutPage() {
   const departamentos = [
     'Antioquia', 'Cundinamarca', 'Valle del Cauca', 'Atlántico', 'Quindío', 'Risaralda', 'Caldas', 'Huila', 'Santander'
   ];
+
+  // Crear el pago exige sesión: sin ella, el comprador llenaba todo el formulario y recién al
+  // pagar recibía un error. App ya resolvió la sesión antes de montar esta página.
+  if (!user) {
+    return <Navigate to="/auth/login?returnUrl=/checkout" replace />;
+  }
 
   if (items.length === 0) {
     return (

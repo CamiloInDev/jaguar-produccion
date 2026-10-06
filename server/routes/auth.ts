@@ -114,7 +114,13 @@ router.post('/logout', (_req, res) => {
   return res.json({ success: true, message: 'Sesión cerrada exitosamente.' });
 });
 
-router.get('/me', authenticateToken, async (req: AuthenticatedRequest, res) => {
+// Sin cookie de sesión no es un error: el frontend consulta /me en cada carga para saber si hay
+// usuario, y un 401 ensuciaba la consola de todos los visitantes. Con cookie inválida o
+// revocada sigue respondiendo 401/403 vía authenticateToken.
+router.get('/me', (req, res, next) => {
+  if (!req.cookies?.token) return res.json({ user: null });
+  next();
+}, authenticateToken, async (req: AuthenticatedRequest, res) => {
   try {
     const safeUser = await dbService.getUserById(req.user!.id);
     if (!safeUser) {

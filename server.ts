@@ -197,6 +197,14 @@ async function start() {
       const titleTag = /<title>[\s\S]*?<\/title>/;
       if (!titleTag.test(indexTemplate)) throw new Error('dist/index.html no tiene <title>: no se puede inyectar el SEO');
 
+      // dist/ también contiene el backend compilado (server.cjs y su .map con el código fuente):
+      // nunca se sirve como archivo estático.
+      app.use((req, res, next) => {
+        let p = req.path;
+        try { p = decodeURIComponent(p); } catch { /* ruta mal codificada: la decide static */ }
+        if (/\/server\.cjs(\.map)?$/i.test(p)) return res.status(404).json({ error: 'No encontrado.' });
+        next();
+      });
       app.use(express.static(distPath, {
         index: false, // "/" también pasa por el inyector SEO de abajo
         setHeaders: (res, filePath) => {

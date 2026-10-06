@@ -98,9 +98,15 @@ describe('GET /api/auth/me', () => {
     expect(res.body.user.email).toBe('admin@test.com');
   });
 
-  it('returns 401 when not authenticated', async () => {
+  it('returns user null (200) when there is no session cookie', async () => {
     const res = await request(app).get('/api/auth/me');
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(200);
+    expect(res.body.user).toBeNull();
+  });
+
+  it('returns 403 when the session cookie is invalid', async () => {
+    const res = await request(app).get('/api/auth/me').set('Cookie', ['token=no-es-un-jwt']);
+    expect(res.status).toBe(403);
   });
 });
 

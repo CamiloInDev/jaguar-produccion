@@ -27,10 +27,10 @@ function fakeOrder(estado: string, id = 'JC-e2e-1') {
 }
 
 test.describe('Checkout Flow', () => {
-  test('checkout page loads when unauthenticated', async ({ page }) => {
+  test('unauthenticated user is sent to login before checkout', async ({ page }) => {
     await page.context().clearCookies();
     await go(page, '/checkout');
-    await expect(page.locator('text=No hay artículos').first()).toBeVisible({ timeout: 5000 });
+    await expect(page).toHaveURL(/\/auth\/login\?returnUrl=(%2F|\/)checkout/, { timeout: 5000 });
   });
 
   test('authenticated user can access checkout', async ({ page }) => {
