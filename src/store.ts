@@ -10,6 +10,8 @@ export const api = axios.create({
 
 interface AuthState {
   user: User | null;
+  /** Solo la verificación inicial de sesión (checkAuth). Mientras es true, App muestra la pantalla de carga
+   *  y desmonta todo el árbol: login/registro/logout no deben tocarlo o la página se remonta y pierde su navegación. */
   loading: boolean;
   error: string | null;
   clearError: () => void;
@@ -40,48 +42,47 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
   login: async (credentials) => {
-    set({ loading: true, error: null });
+    set({ error: null });
     try {
       const res = await api.post('/auth/login', credentials);
-      set({ user: res.data.user, loading: false });
+      set({ user: res.data.user });
       return res.data.user;
     } catch (err: any) {
       const errMsg = err.response?.data?.error || 'Error al iniciar sesión.';
-      set({ error: errMsg, loading: false });
+      set({ error: errMsg });
       throw new Error(errMsg);
     }
   },
   register: async (formData) => {
-    set({ loading: true, error: null });
+    set({ error: null });
     try {
       const res = await api.post('/auth/registro', formData);
-      set({ user: res.data.user, loading: false });
+      set({ user: res.data.user });
       return res.data.user;
     } catch (err: any) {
       const errMsg = err.response?.data?.error || 'Error al registrarse.';
-      set({ error: errMsg, loading: false });
+      set({ error: errMsg });
       throw new Error(errMsg);
     }
   },
   logout: async () => {
-    set({ loading: true });
     try {
       await api.post('/auth/logout');
     } catch (err) {
       console.warn('Silent failure on backend logout call');
     } finally {
-      set({ user: null, loading: false });
+      set({ user: null });
     }
   },
   updateProfile: async (profileData) => {
-    set({ loading: true, error: null });
+    set({ error: null });
     try {
       const res = await api.put('/auth/perfil', profileData);
-      set({ user: res.data.user, loading: false });
+      set({ user: res.data.user });
       return res.data.user;
     } catch (err: any) {
       const errMsg = err.response?.data?.error || 'Error al actualizar perfil.';
-      set({ error: errMsg, loading: false });
+      set({ error: errMsg });
       throw new Error(errMsg);
     }
   },

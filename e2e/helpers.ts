@@ -1,3 +1,5 @@
+import { expect } from '@playwright/test';
+
 export async function acceptPrivacy(page: any) {
   const btn = page.locator('button:has-text("Acepto la política")');
   try {
@@ -43,4 +45,7 @@ export async function loginAs(page: any, email: string, password: string) {
   await page.locator('input[type="password"]').fill(password);
   await page.locator('button[type="submit"]').click();
   await page.waitForURL('**/mi-cuenta', { timeout: 15000 });
+  // La URL cambiaba aunque la pantalla se quedara en el formulario (bug del loading global, 2026-10-05):
+  // exigir que el login ya no esté renderizado.
+  await expect(page.locator('#login-view')).toHaveCount(0, { timeout: 5000 });
 }
