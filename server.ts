@@ -22,9 +22,12 @@ import orderRoutes from './server/routes/orders';
 import slideRoutes from './server/routes/slides';
 import reservationRoutes from './server/routes/reservations';
 import userRoutes from './server/routes/users';
+import chatRoutes from './server/routes/chat';
 import { UPLOADS_DIR, ensureUploadsDir } from './server/lib/uploads';
 import { cspDirectives } from './server/config/csp';
 import { buildSeo, sitemapUrls, clearSeoCache } from './server/seo';
+import { invalidateCatalogCache, isChatEnabled } from './server/services/chatbot';
+import { dbService } from './server/db';
 
 // -----------------------------------------------------------------------------
 // Global error handlers to catch ALL crashes
@@ -97,7 +100,7 @@ app.use(apiRateLimiter);
 app.use(/^\/api\/(productos|experiencias|haciendas)/, (req, res, next) => {
   if (req.method !== 'GET') {
     res.on('finish', () => {
-      if (res.statusCode < 400) { clearSeoCache(); sitemapCache = null; }
+      if (res.statusCode < 400) { clearSeoCache(); sitemapCache = null; invalidateCatalogCache(); }
     });
   }
   next();
@@ -137,6 +140,15 @@ app.use('/api/ordenes', orderRoutes);
 app.use('/api/slides', slideRoutes);
 app.use('/api/reservas', reservationRoutes);
 app.use('/api/usuarios', userRoutes);
+app.use('/api/chat', chatRoutes);
+
+// Purga de conversaciones viejas del asistente (>90 días): una vez por arranque.
+// Si el bot está desactivado no hay por qué tocar la tabla.
+if (isChatEnabled()) {
+  dbService.pruneOldChatMessages(90)
+    .then(deleted => { if (deleted > 0) console.log(`[CHAT] Purga de chat_messages: ${deleted} filas >90 días borradas`); })
+    .catch(err => console.error(`[CHAT] Purga de chat_messages falló: ${err.message}`));
+}
 
 // -----------------------------------------------------------------------------
 // SEO: robots.txt y sitemap.xml dinámico (solo URLs públicas, canónicas y activas).

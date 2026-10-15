@@ -52,6 +52,17 @@ const envSchema = z.object({
   SMTP_USER: z.string().min(1).optional(),
   SMTP_PASSWORD: z.string().min(1).optional(),
   SMTP_FROM: z.string().min(1).optional(),
+
+  // Asistente de chat (POST /api/chat). Proveedor LLM compatible con la API de
+  // OpenAI (chat/completions): sirve OpenAI directo o el endpoint compatible de
+  // Gemini (?key= en URL, base https://generativelanguage.googleapis.com/v1beta/openai).
+  // CHAT_BOT_ENABLED !== 'false' apaga todo el módulo (nada se expone).
+  CHAT_BOT_ENABLED: z.union([z.literal('true'), z.literal('false')]).default('true'),
+  CHAT_LLM_API_KEY: z.string().min(20).optional(),
+  CHAT_LLM_BASE_URL: z.string().url().default('https://api.openai.com/v1'),
+  CHAT_LLM_MODEL: z.string().min(1).default('gpt-4o-mini'),
+  // techo de tokens por respuesta (control de costo). Tope duro: 800.
+  CHAT_LLM_MAX_TOKENS: z.coerce.number().int().min(50).max(800).default(400),
 });
 
 const envSchemaWithRules = envSchema.superRefine((data, ctx) => {
@@ -61,6 +72,15 @@ const envSchemaWithRules = envSchema.superRefine((data, ctx) => {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: [key], message: `${key} is required in production` });
       }
     });
+    // Si el chat está activo, la API key del LLM es obligatoria en producción.
+    // (Se puede arrancar con CHAT_BOT_ENABLED=false para desactivarlo sin quitar la credencial.)
+    if (data.CHAT_BOT_ENABLED === 'true' && !data.CHAT_LLM_API_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['CHAT_LLM_API_KEY'],
+        message: 'CHAT_LLM_API_KEY is required in production when the chat bot is enabled (or set CHAT_BOT_ENABLED=false)',
+      });
+    }
   }
 });
 

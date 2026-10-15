@@ -36,6 +36,10 @@
 -- Si `users` no tiene la columna `token_version` (agregada 2026-09-24 para poder
 -- invalidar sesiones al cambiar la contraseña), córrelo ANTES de desplegar el código nuevo:
 --   ALTER TABLE users ADD COLUMN token_version INT NOT NULL DEFAULT 0 AFTER rol;
+--
+-- Si la BD ya existía antes del asistente de chat (agregado 2026-10-15), crea la
+-- tabla `chat_messages` corriendo el CREATE TABLE de más abajo (usa IF NOT EXISTS,
+-- se puede reimportar el archivo completo sin borrar nada). No requiere datos seed.
 -- ============================================================================
 
 SET NAMES utf8mb4;
@@ -245,4 +249,24 @@ CREATE TABLE IF NOT EXISTS password_resets (
   created_at VARCHAR(32)  NOT NULL,
   CONSTRAINT fk_password_resets_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   INDEX idx_password_resets_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------------------------
+-- Historial del asistente de chat (privacidad: conversaciones anónimas)
+-- --------------------------------------------------------------------------
+-- El visitante NO se identifica: session_id es un UUID que genera el navegador
+-- y no existe ningún vínculo con users. La IP nunca se guarda en claro: solo un
+-- hash SHA-256 con JWT_SECRET como sal, para poder medir abuso sin guardar PII.
+-- El servicio borra filas de más de 90 días en cada arranque del servidor.
+-- Si el bot llega a permitir iniciar sesión o guardar pedidos, esta tabla hay
+-- que revisarla contra la política de privacidad (src/pages/Privacidad.tsx).
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id         BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  session_id CHAR(36)     NOT NULL,
+  role       ENUM('user','assistant') NOT NULL,
+  content    TEXT         NOT NULL,
+  ip_hash    CHAR(64)     NULL,
+  created_at VARCHAR(32)  NOT NULL,
+  INDEX idx_chat_session (session_id, id),
+  INDEX idx_chat_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

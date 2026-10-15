@@ -13,7 +13,9 @@ export const cspDirectives: Record<string, string[]> = {
   defaultSrc: ["'self'"],
   scriptSrc: ["'self'", 'https://www.instagram.com', 'https://*.cdninstagram.com'],
   scriptSrcAttr: ["'none'"],
-  frameSrc: ["'self'", 'https://www.instagram.com', 'https://*.cdninstagram.com', 'https://www.google.com', 'https://n8n.skatmaskacore.com'],
+  // frameSrc: el sitio ya no embebe iframes externos de chat (el asistente va
+  // en un componente propio). Solo IG embeds y Google Maps.
+  frameSrc: ["'self'", 'https://www.instagram.com', 'https://*.cdninstagram.com', 'https://www.google.com'],
   imgSrc: ["'self'", 'data:', 'https://www.instagram.com', 'https://*.cdninstagram.com', 'https://cafejaguar.com', 'https://images.unsplash.com'],
   connectSrc: ["'self'", 'https://www.instagram.com'],
   styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],

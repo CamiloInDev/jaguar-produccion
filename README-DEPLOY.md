@@ -116,6 +116,11 @@ crítica, el servidor **no arranca** y el log dice exactamente cuál falta.
 | `SMTP_USER` | `noreply@tudominio.com` | |
 | `SMTP_PASSWORD` | *(secreto)* | Contraseña de esa cuenta de correo |
 | `SMTP_FROM` | `Jaguar Coffee <noreply@tudominio.com>` | Remitente que ve el usuario en el correo de recuperación de contraseña |
+| `CHAT_BOT_ENABLED` | `true` | Asistente de chat (§8.2). `false` lo apaga por completo (el endpoint `/api/chat` responde 503 y el widget cae a WhatsApp). Útil si se queda sin crédito el proveedor LLM |
+| `CHAT_LLM_API_KEY` | *(secreto)* | API key del proveedor LLM. Obligatoria en producción si el bot está activo. Se revoca desde el proveedor; **nunca sale del backend** (el frontend no la conoce) |
+| `CHAT_LLM_BASE_URL` | `https://api.openai.com/v1` | Endpoint compatible con `chat/completions` de OpenAI. Para Gemini: `https://generativelanguage.googleapis.com/v1beta/openai` (la API key va en la URL: `...?key=LA_KEY` en `CHAT_LLM_BASE_URL` y `CHAT_LLM_API_KEY=LA_KEY`) |
+| `CHAT_LLM_MODEL` | `gpt-4o-mini` | Modelo económico del proveedor elegido. Se puede cambiar sin tocar código |
+| `CHAT_LLM_MAX_TOKENS` | `400` | Techo de tokens por respuesta (control de costo). Máximo admitido: 800 |
 
 > Usa `.env.example` como plantilla. En local se copia a `.env` (nunca se sube
 > al repo, está en `.gitignore`). Si dejas los `SMTP_*` vacíos en local/dev, el
@@ -284,20 +289,44 @@ Roles disponibles (`server/middleware/auth.ts` → `requireRole`):
   el correo no se envía — se imprime en la consola del servidor para poder
   copiar el link manualmente y probar el flujo.
 
-### 8.2 Asistente virtual (burbuja de chat)
+### 8.2 Asistente virtual (chat integrado, sin n8n)
 
-Hay una burbuja flotante (junto a la del carrito) que abre un chat conectado a
-un workflow de **n8n** (`src/components/ChatBubble.tsx`). Es un simple
-`<iframe>` apuntando a la URL pública del Chat Trigger de n8n — no hay lógica
-de chat propia en este repo, n8n aloja y sirve la interfaz completa.
+La burbuja flotante (junto a la del carrito) abre un chat **propio** — desde el
+2026-10-15 ya no usa un iframe del Chat Trigger de n8n:
 
-- Si la URL del webhook cambia, actualiza la constante `N8N_CHAT_URL` en
-  `ChatBubble.tsx`.
-- El **texto y los colores del bot** (título, subtítulo, mensaje inicial, CSS)
-  se configuran **dentro del nodo Chat Trigger en n8n**, no en este código.
-- La CSP (`server.ts` → `helmetConfig.contentSecurityPolicy` → `frameSrc`)
-  tiene que incluir el dominio del webhook de n8n o el iframe no cargará en
-  producción.
+- **Frontend:** `src/components/ChatBubble.tsx`. Componente React brandeado
+  (azul `#122C9B`, ámbar `#FFA42C`) que llama a `POST /api/chat` same-origin y
+  renderiza la respuesta en streaming (SSE). Si el backend falla, el widget
+  muestra directamente el link de WhatsApp (`wa.me/573157307016`), nunca se rompe.
+- **Backend:** `server/routes/chat.ts` + `server/services/chatbot.ts`. El
+  catálogo real de la BD (productos, experiencias, haciendas, cursos) se inyecta
+  como contexto en cada conversación (caché de 5 min), así el bot no inventa
+  precios y no hace falta actualizar el prompt cuando cambian: basta editar el
+  catálogo en Admin. El historial del visitante se guarda anonimizado en
+  `chat_messages` (sin PII, solo hash con sal de la IP); se purga el >90 días en
+  cada arranque del servidor.
+- **No procesa nada**: el bot solo informa y deriva a `/tienda`, páginas de
+  reserva o WhatsApp. No hay escrituras contra la API.
+
+Medidas de seguridad y costo:
+- Rate limit propio: 20 mensajes por IP cada 15 min (`chatRateLimiter`) + el global.
+- Validación del mensaje (1–1000 chars, control de caracteres) y `session_id` UUID.
+- Recomendado `max_tokens` bajo (400) y modelo económico (`gpt-4o-mini` o alike).
+- Killswitch: `CHAT_BOT_ENABLED=false` apaga el endpoint sin redesplegar código
+  de más (variables de entorno, §4).
+
+Pruebas del chat sin mandar tráfico real al proveedor: `tests/unit/chatbot.test.ts`
+cubre el armado del contexto, el system prompt y la sanitización. Para probar
+punta a punta en producción, conviene una API key de ambiente bajo consumo y
+monitorear el gasto del proveedor — o temporalmente `CHAT_BOT_ENABLED=false`.
+
+### 8.3 Historial de n8n (ya retirado)
+
+El asistente se integró al código (§8.2). El dominio `n8n.skatmaskacore.com`
+ya no se usa en el sitio: estaba en el `frameSrc` de la CSP solo para el iframe
+del chat y se retiró junto con él. Si el workflow del Chat Trigger sigue activo
+en n8n, se puede desactivar desde el panel de n8n (nadie lo consume). La nota
+externa del armado original vive fuera del repo, en `..\jaguar-notas\`.
 
 ---
 
@@ -361,7 +390,7 @@ npm run test:e2e       # end-to-end, con el server corriendo aparte
 | `429 Too Many Requests` en login/checkout durante pruebas manuales | Rate limiting activo (10 intentos de auth / 15 min, 30 de checkout / 15 min) | Es comportamiento esperado en producción; espera la ventana o reinicia el proceso en dev |
 | Cambié una variable `VITE_*` y no se ve el cambio | Esas variables se incrustan en **build time**, no runtime | `npm run build` de nuevo y Restart |
 | El correo de "recuperar contraseña" nunca llega | `SMTP_*` no configurado o incorrecto | Revisa el log del server — si no hay SMTP configurado, imprime el correo simulado ahí en vez de enviarlo; confirma credenciales de la cuenta de correo en hPanel |
-| La burbuja del asistente (chat) no carga o queda en blanco | El dominio del webhook de n8n no está en la CSP, o el workflow de n8n está caído/pausado | Revisa la consola del navegador por errores de CSP; confirma que el workflow esté activo en n8n (`curl` a la URL del webhook debe devolver `200`) |
+| La burbuja del asistente (chat) no carga o responde con "no puedo responder" | `CHAT_BOT_ENABLED=false`, falta `CHAT_LLM_API_KEY` o el proveedor LLM caído (§4, §8.2) | `curl -X POST .../api/chat` debe devolver SSE 200; si no, 503/429 con su motivo. Revisa los logs del servidor (`[CHAT] ...`) y las variables `CHAT_*` |
 
 ---
 

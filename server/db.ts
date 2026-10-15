@@ -922,4 +922,33 @@ export const dbService = {
     const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM reservations WHERE id = ? LIMIT 1', [id]);
     return rows.length ? rowToReservation(rows[0]) : null;
   },
+
+  // --------------------------------------------------------------------------
+  // Historial del asistente de chat (anonimato: ver cabecera en db/schema.sql)
+  // --------------------------------------------------------------------------
+  async saveChatMessage(msg: { session_id: string; role: 'user' | 'assistant'; content: string; ip_hash?: string | null }): Promise<void> {
+    await pool.query(
+      'INSERT INTO chat_messages (session_id, role, content, ip_hash, created_at) VALUES (?, ?, ?, ?, ?)',
+      [msg.session_id, msg.role, msg.content, msg.ip_hash ?? null, new Date().toISOString()]
+    );
+  },
+
+  /** Últimos `limit` turnos del turno anterior al estado actual (excluye el mensaje recién insertado). */
+  async getChatHistory(session_id: string, limit = 10): Promise<Array<{ role: 'user' | 'assistant'; content: string }>> {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      'SELECT role, content FROM chat_messages WHERE session_id = ? ORDER BY id DESC LIMIT ?',
+      [session_id, limit + 1] // +1 para descartar el mensaje recién guardado por la ruta
+    );
+    return rows
+      .slice(1) // el primero es el mensaje actual (la ruta lo guarda antes de consultar)
+      .reverse() // cronológico para el modelo
+      .map(r => ({ role: r.role as 'user' | 'assistant', content: String(r.content) }));
+  },
+
+  /** Borra conversaciones más viejas que `days` días. Devuelve filas borradas. */
+  async pruneOldChatMessages(days = 90): Promise<number> {
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    const [res] = await pool.query<ResultSetHeader>('DELETE FROM chat_messages WHERE created_at < ?', [cutoff]);
+    return res.affectedRows;
+  },
 };

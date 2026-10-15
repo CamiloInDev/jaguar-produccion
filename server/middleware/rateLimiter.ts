@@ -58,3 +58,19 @@ export const checkoutRateLimiter = rateLimit({
     res.status(429).json({ error: 'Demasiadas solicitudes de pago. Intente más tarde.' });
   }
 });
+
+/**
+ * Mensajes hacia el asistente de chat. Cada uno cuesta tokens (dinero real), así que
+ * el límite es por-mensaje y bajo: 20 mensajes por IP cada 15 minutos cubre una
+ * conversación larga sin dejar abierta la llave de gasto a abuso automatizado.
+ */
+export const chatRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => isTestEnv,
+  handler: (_req, res) => {
+    res.status(429).json({ error: 'El asistente alcanzó el límite de mensajes por ahora. Escríbenos por WhatsApp: https://wa.me/573157307016' });
+  }
+});
