@@ -86,4 +86,38 @@ describe('verifyWebhookSignature', () => {
     expect(verifyWebhookSignature({ xSignature: 'v1=abc', xRequestId: 'r', dataId: '1', secret: SECRET })).toBe(false);
     expect(verifyWebhookSignature({ xSignature: 'ts=1,v1=short', xRequestId: 'r', dataId: '1', secret: SECRET })).toBe(false);
   });
+
+  it('accepts data.id that arrives only in the body (candidates: query + body)', () => {
+    // Notificación real 2026-10-22: el manifest usa el id aunque llegue solo en el body.
+    const v1 = sign('id:1354033975;request-id:rr-22;ts:1742505638683;');
+    expect(verifyWebhookSignature({
+      xSignature: `ts=1742505638683,v1=${v1}`,
+      xRequestId: 'rr-22',
+      dataId: [undefined, '1354033975'],
+      secret: SECRET,
+    })).toBe(true);
+  });
+
+  it('accepts notifications signed without id (data.id absent everywhere)', () => {
+    const v1 = sign('request-id:r;ts:9;');
+    expect(verifyWebhookSignature({ xSignature: `ts=9,v1=${v1}`, xRequestId: 'r', dataId: [undefined, undefined], secret: SECRET })).toBe(true);
+  });
+
+  it('accepts multi-v1 x-signature when at least one v1 is valid', () => {
+    const buena = sign('id:7;request-id:r;ts:2;');
+    const otra = sign('id:otro-manifest;ts:2;');
+    expect(verifyWebhookSignature({
+      xSignature: `ts=2,v1=${otra},v1=${buena}`,
+      xRequestId: 'r',
+      dataId: '7',
+      secret: SECRET,
+    })).toBe(true);
+    // Ninguna válida → rechaza
+    expect(verifyWebhookSignature({
+      xSignature: `ts=2,v1=${otra},v1=${otra}`,
+      xRequestId: 'r',
+      dataId: '7',
+      secret: SECRET,
+    })).toBe(false);
+  });
 });

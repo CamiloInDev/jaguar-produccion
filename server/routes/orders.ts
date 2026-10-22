@@ -296,22 +296,31 @@ if (env.NODE_ENV !== 'production') {
  * Webhook de Mercado Pago (Tus integraciones > Webhooks, evento "Pagos").
  * https://www.mercadopago.com.co/developers/es/docs/checkout-pro-preferences/payment-notifications
  *
- * - La firma x-signature cubre data.id (del query), x-request-id y ts — NO el body.
+ * - La firma x-signature cubre data.id (del query o del body), x-request-id y ts — NO el body.
  *   Por eso del request solo se usa data.id; el estado se consulta a la API.
  * - 401 firma inválida · 500 si falla la consulta a MP (MP reintenta) · 200 en todo lo
  *   demás, incluidos casos que un reintento no arregla (orden inexistente, monto que no cuadra).
  */
 router.post('/mp-webhook', async (req, res) => {
-  const dataId = typeof req.query['data.id'] === 'string' ? req.query['data.id'] : undefined;
+  const queryDataId = typeof req.query['data.id'] === 'string' ? req.query['data.id'] : undefined;
+  const bodyDataId = req.body?.data?.id != null ? String(req.body.data.id) : undefined;
+  const dataId = queryDataId ?? bodyDataId;
   const type = typeof req.query.type === 'string' ? req.query.type : req.body?.type;
 
   const valid = mercadopago.verifyWebhookSignature({
     xSignature: req.header('x-signature'),
     xRequestId: req.header('x-request-id'),
-    dataId,
+    dataId: [queryDataId, bodyDataId],
   });
   if (!valid) {
-    console.warn('[MP] Webhook con firma inválida o ausente');
+    // Log diagnóstico (la firma no es un secreto: es un HMAC sobre datos públicos del request).
+    console.warn('[MP] Webhook con firma inválida o ausente', JSON.stringify({
+      path: req.url?.slice(0, 120),
+      xSignature: String(req.header('x-signature') ?? '').slice(0, 100),
+      xRequestId: req.header('x-request-id'),
+      queryDataId,
+      bodyDataId: bodyDataId ? 'presente' : 'ausente',
+    }));
     return res.status(401).json({ error: 'Firma inválida.' });
   }
 

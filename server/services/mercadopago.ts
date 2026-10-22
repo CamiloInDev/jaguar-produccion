@@ -66,33 +66,57 @@ export function buildSignatureManifest(dataId: string, requestId: string, ts: st
 }
 
 /**
- * Valida el header x-signature (`ts=...,v1=...`) con HMAC-SHA256 y la clave secreta de webhooks.
+ * Valida el header x-signature (`ts=...,v1=...[,v1=...]`) con HMAC-SHA256 y la clave
+ * secreta de webhooks.
  *
- * Implementado a mano en vez de usar WebhookSignatureValidator del SDK porque este no pasa
- * data.id a minúsculas y su `toleranceSeconds` interpreta `ts` en segundos cuando Mercado Pago
- * lo envía en milisegundos. El HMAC NO cubre el body: nunca se decide nada con el body.
+ * Implementado a mano en vez de usar WebhookSignatureValidator del SDK porque este no
+ * pasa data.id a minúsculas y su `toleranceSeconds` interpreta `ts` en segundos cuando
+ * Mercado Pago lo envía en milisegundos. El HMAC NO cubre el body: nunca se decide nada
+ * con el body.
+ *
+ * Tolerancias confirmadas contra notificaciones reales (2026-10-22): el `x-signature` puede
+ * traer varias firmas `v1` y basta que una sea válida, y el `data.id` del manifest puede
+ * llegar solo en el query (`?data.id=`) o solo en el body (`data.id`). Se acepta la
+ * notificación si cualquier `v1` cuadra con el manifest de cualquiera de los ids
+ * candidatos (query, body, o ninguno). La seguridad no cambia: sigue siendo un HMAC del
+ * secreto sobre `id/request-id/ts` de la propia notificación.
  */
 export function verifyWebhookSignature(params: {
   xSignature: string | undefined;
   xRequestId: string | undefined;
-  dataId: string | undefined;
+  /** Ids candidatos del recurso (p. ej. data.id del query y del body). */
+  dataId: string | string[] | undefined;
   secret?: string;
 }): boolean {
   const secret = params.secret ?? env.MP_WEBHOOK_SECRET;
   let ts: string | undefined;
-  let v1: string | undefined;
+  const hashes: string[] = [];
   for (const part of String(params.xSignature ?? '').split(',')) {
     const eq = part.indexOf('=');
     if (eq === -1) continue;
     const key = part.slice(0, eq).trim();
     const value = part.slice(eq + 1).trim();
     if (key === 'ts') ts = value;
-    if (key === 'v1') v1 = value;
+    else if (key === 'v1' && value) hashes.push(value.toLowerCase());
   }
-  if (!ts || !v1) return false;
+  if (!ts || hashes.length === 0) return false;
 
-  const manifest = buildSignatureManifest(String(params.dataId ?? ''), String(params.xRequestId ?? ''), ts);
-  const expected = Buffer.from(crypto.createHmac('sha256', secret).update(manifest).digest('hex'));
-  const received = Buffer.from(v1.toLowerCase());
-  return received.length === expected.length && crypto.timingSafeEqual(received, expected);
+  const ids = Array.isArray(params.dataId) ? params.dataId : [params.dataId];
+  const candidateIds: string[] = [];
+  const seen = new Set<string>();
+  for (const id of ids) {
+    const s = String(id ?? '').trim().toLowerCase();
+    if (s && !seen.has(s)) { seen.add(s); candidateIds.push(s); }
+  }
+  candidateIds.push(''); // variante sin id (par ausente del manifest)
+
+  const requestId = String(params.xRequestId ?? '');
+  const expected = candidateIds.map(id =>
+    Buffer.from(crypto.createHmac('sha256', secret).update(buildSignatureManifest(id, requestId, ts)).digest('hex'))
+  );
+
+  return hashes.some(hash => {
+    const received = Buffer.from(hash);
+    return expected.some(exp => received.length === exp.length && crypto.timingSafeEqual(received, exp));
+  });
 }
