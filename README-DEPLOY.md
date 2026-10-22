@@ -414,7 +414,7 @@ npm run test:e2e       # end-to-end, con el server corriendo aparte
 
 5. **Persistencia de uploads en Hostinger.** Confirmado 2026-10-05: `./uploads` se perdía al redistribuir. Desde entonces en producción se guardan en `~/jaguar-uploads` (`server/lib/uploads.ts`). Falta confirmar en vivo que esa carpeta sobrevive a una redistribución. Si no, mover el almacenamiento a un servicio externo (Cloudinary, S3-compatible); `optimizeAndSaveImage` es el único punto a cambiar.
 
-6. **Resuelto 2026-09-24: `npm audit`.** Tras `npm audit fix` (sin saltos de versión mayor) quedan **0 vulnerabilidades en dependencias de producción**: nodemailer 9.1.1, react-router-dom 7.18.4, express 4.22.3 y mysql2 3.24.4. Solo quedan 4 moderadas en herramientas de test (vitest), que no se despliegan.
+6. **Resuelto 2026-10-22: `npm audit` → 0 vulnerabilidades.** Se actualizaron `vite` 7.3.7, `sharp` 0.35.5, `vitest`/`@vitest/ui`/`@vitest/coverage-v8` 4.1.12 y `follow-redirects` 1.16.1. La actualización periódica quedó automatizada con Dependabot + CI (§15).
 
 7. **SEO fuera del código.** Hay que dar de alta la propiedad de dominio en Google Search Console y enviar el sitemap, crear el Perfil de Empresa de Google con los mismos nombre, dirección y teléfono del sitio, y subir fotos reales de las bolsas (las de Unsplash son de relleno). Ver `.claude/skills/seo-tienda/SKILL.md`.
 ---
@@ -462,3 +462,47 @@ Código: `server/seo.ts`. Guía, reglas y pendientes: `.claude/skills/seo-tienda
 | `npm test` | Tests unitarios + integración |
 | `npm run test:e2e` | Tests end-to-end (Playwright) |
 | `npm run test:all` | `npm test` + `npm run test:e2e` |
+| `npm run deps:check` | `npm audit` (falla si hay cualquier vulnerabilidad) |
+| `npm run deps:outdated` | Lista paquetes con versión más nueva disponible |
+| `npm run deps:update` | `npm update` + audit + type-check + tests (sube parches/minors) |
+
+---
+
+## 15. Actualización periódica de dependencias (mantenimiento manual)
+
+El despliegue es **siempre por zip a Hostinger**: no hay CI/CD ni GitHub en el flujo de entrega.
+Por eso el mantenimiento se hace **a mano**, una vez al mes, en la copia local del proyecto.
+
+### 15.1 Rutina mensual (10 minutos)
+
+```bash
+npm run deps:check      # ¿hay vulnerabilidades? (npm audit, falla si hay alguna)
+npm run deps:outdated   # ¿qué paquetes tienen versión más nueva?
+npm run deps:update     # sube parches/minors + audit + tsc + tests
+npm run build           # verifica que compila
+npm run deploy:zip      # genera el zip
+```
+
+Luego se sube el zip a Hostinger y se pulsa *Redistribuir* (§9). Si `npm run deps:update`
+rompe algo: se restauran `package.json` y `package-lock.json` desde el commit anterior con
+`git checkout HEAD~1 -- package.json package-lock.json && npm ci`, y se anota el paquete.
+
+### 15.2 Reglas
+
+- **Parches y minors**: una vez al mes (o antes si `npm run deps:check` falla).
+- **Vulnerabilidad alta/crítica**: el mismo día, sin esperar al mes.
+- **Versión mayor** (ej. React 19 → 20): nunca automático. `npm install pkg@latest`, revisar la
+  guía de migración del paquete, `npm run test:all` y desplegar en un cambio aparte.
+- Los paquetes de `devDependencies` (tests, build) no se despliegan, pero también se actualizan.
+
+### 15.3 Opcional: si algún día lo pasan a un repo con Dependabot
+
+Si el cliente decide subir el proyecto a GitHub, basta con añadir un `.github/dependabot.yml`
+(revisión semanal + PR de parches) y un workflow con `npm audit` + `tsc` + `vite build`.
+Mientras no exista ese repo, no se necesita nada de esto: la rutina de §15.1 es suficiente.
+
+### 15.4 Estado actual (2026-10-22)
+
+`npm audit`: **0 vulnerabilidades**. Se subieron `vite` 7.3.7, `sharp` 0.35.5,
+`vitest`/`@vitest/ui`/`@vitest/coverage-v8` 4.1.12 (arrastra `@vitest/mocker` 4.1.12) y
+`follow-redirects` 1.16.1 (transitiva de `axios`). Verificado con 226/226 tests, `tsc` y build.

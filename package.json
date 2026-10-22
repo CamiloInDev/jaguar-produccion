@@ -21,7 +21,10 @@
     "test:e2e:ui": "playwright test --ui",
     "test:all": "npm run test && npm run test:e2e",
     "db:seed": "tsx server/seed.ts",
-    "deploy:zip": "node scripts/deploy-zip.mjs"
+    "deploy:zip": "node scripts/deploy-zip.mjs",
+    "deps:check": "npm audit --audit-level=low",
+    "deps:outdated": "npm outdated",
+    "deps:update": "npm update && npm audit --audit-level=low && npm run lint && npm test"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
@@ -47,8 +50,7 @@
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "react-router-dom": "^7.15.1",
-    "sharp": "^0.35.4",
-    "vite": "^7.3.6",
+    "sharp": "^0.35.5",
     "zod": "^4.4.3",
     "zustand": "^5.0.13"
   },
@@ -66,8 +68,8 @@
     "@types/node": "^22.14.0",
     "@types/nodemailer": "^8.0.1",
     "@types/supertest": "^7.2.0",
-    "@vitest/coverage-v8": "^4.1.9",
-    "@vitest/ui": "^4.1.9",
+    "@vitest/coverage-v8": "^4.1.12",
+    "@vitest/ui": "^4.1.12",
     "autoprefixer": "^10.4.21",
     "happy-dom": "^20.10.6",
     "jsdom": "^29.1.1",
@@ -75,7 +77,7 @@
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "vite": "^7.3.6",
-    "vitest": "^4.1.11"
+    "vite": "^7.3.7",
+    "vitest": "^4.1.12"
   }
 }
