@@ -8,7 +8,7 @@ import { orderStatusValidation, handleValidationErrors } from '../middleware/val
 import { internalError } from '../middleware/errorHandler';
 import { OrderStatus, OrderItem, Order, ShippingAddress } from '../../src/types';
 import * as mercadopago from '../services/mercadopago';
-import { decidePaymentTransition, EXTERNAL_REFERENCE_RE } from '../services/paymentRules';
+import { applyPayment, ApplyPaymentResult } from '../services/payment-application';
 
 const router = Router();
 
@@ -110,39 +110,6 @@ function buildPreferenceBody(order: Order, payer: { email: string; nombre?: stri
       expiration_date_to: new Date(Date.now() + env.MP_PREFERENCE_EXPIRATION_MINUTES * 60_000).toISOString(),
     } : {}),
   };
-}
-
-type ApplyPaymentResult =
-  | { kind: 'applied'; order: Order; changed: boolean }
-  | { kind: 'payment_not_found' }
-  | { kind: 'order_not_found'; reference?: string }
-  | { kind: 'reference_mismatch' };
-
-/**
- * Aplica a su orden el estado ACTUAL de un pago consultado a la API de Mercado Pago.
- * Única ruta por la que una orden cambia por un pago: la usan el webhook y la
- * verificación al volver del checkout, así ambas siguen exactamente las mismas reglas.
- * Los errores de red/5xx de Mercado Pago se propagan (el webhook responde 500 → MP reintenta).
- */
-async function applyPayment(paymentId: string, expectedOrderId?: string): Promise<ApplyPaymentResult> {
-  const payment = await mercadopago.getPayment(paymentId);
-  if (!payment) return { kind: 'payment_not_found' };
-
-  const reference = payment.external_reference;
-  if (!reference || !EXTERNAL_REFERENCE_RE.test(reference)) return { kind: 'order_not_found', reference };
-  if (expectedOrderId && reference !== expectedOrderId) return { kind: 'reference_mismatch' };
-
-  let alert: string | undefined;
-  const result = await dbService.applyOrderPayment(reference, String(payment.id), (current) => {
-    const decision = decidePaymentTransition(current, payment);
-    alert = decision.alert;
-    return decision;
-  });
-  if (!result) return { kind: 'order_not_found', reference };
-
-  if (alert) console.error(`[MP][ALERTA] orden ${reference}, pago ${payment.id} (${payment.status}): ${alert}`);
-  if (result.changed) console.log(`[MP] orden ${reference}: ${result.previous} → ${result.order.estado} (pago ${payment.id}, ${payment.status})`);
-  return { kind: 'applied', order: result.order, changed: result.changed };
 }
 
 /**

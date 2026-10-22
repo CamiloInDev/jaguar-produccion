@@ -54,6 +54,22 @@ export async function refundPayment(paymentId: string, amount?: number) {
 }
 
 /**
+ * Pagos asociados a una orden (`external_reference` = id de la orden), del más nuevo al
+ * más viejo. La usa la conciliación periódica para detectar pagos cuyo webhook no llegó.
+ */
+export async function searchPaymentsByReference(reference: string) {
+  const res = await paymentClient.search({
+    options: {
+      external_reference: reference,
+      sort: 'date_created',
+      criteria: 'desc',
+      limit: 10,
+    },
+  });
+  return res.results ?? [];
+}
+
+/**
  * Manifest oficial de la firma de webhooks: `id:{data.id};request-id:{x-request-id};ts:{ts};`
  * — se omite el par cuyo valor falte, y data.id alfanumérico va en minúsculas.
  */

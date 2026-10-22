@@ -28,6 +28,7 @@ import { cspDirectives } from './server/config/csp';
 import { buildSeo, sitemapUrls, clearSeoCache } from './server/seo';
 import { invalidateCatalogCache, isChatEnabled } from './server/services/chatbot';
 import { dbService } from './server/db';
+import { startReconciliacionPagos } from './server/jobs/reconciliar-pagos';
 
 // -----------------------------------------------------------------------------
 // Global error handlers to catch ALL crashes
@@ -245,6 +246,7 @@ async function start() {
 
     app.listen(env.PORT, '0.0.0.0', () => {
       console.log(`[JAGUAR-SERVER] Running on http://localhost:${env.PORT}`);
+      startReconciliacionPagos();
     });
   } catch (err) {
     console.log(`[STARTUP ERROR] ${err}`);

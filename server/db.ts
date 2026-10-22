@@ -662,6 +662,21 @@ export const dbService = {
   },
 
   /**
+   * Órdenes pendientes con preferencia creada desde `sinceISO` (máx. 100).
+   * Insumo de la conciliación periódica: si el webhook de MP no llegó, estas son
+   * las candidatas a tener un pago aprobado que todavía no se aplicó.
+   */
+  async getPendingOrdersWithPreference(sinceISO: string): Promise<Array<{ id: string; preference_id: string; created_at: string }>> {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT id, preference_id, created_at FROM orders
+       WHERE estado = 'pendiente' AND preference_id IS NOT NULL AND created_at >= ?
+       ORDER BY created_at DESC LIMIT 100`,
+      [sinceISO]
+    );
+    return rows.map(r => ({ id: String(r.id), preference_id: String(r.preference_id), created_at: String(r.created_at) }));
+  },
+
+  /**
    * Aplica el resultado de un pago de la pasarela a una orden, de forma atómica.
    *
    * `decide` recibe la orden bloqueada (SELECT ... FOR UPDATE) y devuelve el estado nuevo
