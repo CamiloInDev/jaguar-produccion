@@ -192,17 +192,37 @@ describe('POST /api/ordenes/crear-pago', () => {
 });
 
 describe('POST /api/ordenes/mp-webhook', () => {
-  it('rejects a missing or invalid signature with 401 and does not touch the order', async () => {
+  it('with MP_WEBHOOK_MODO=estricto, rejects a missing or invalid signature with 401 and does not touch the order', async () => {
+    process.env.MP_WEBHOOK_MODO = 'estricto';
+    try {
+      const orderId = await createOrder(await getUserCookies());
+      getPayment.mockResolvedValue(mpPayment({ external_reference: orderId }));
+
+      const unsigned = await sendWebhook('111', { omitSignature: true });
+      expect(unsigned.status).toBe(401);
+      const forged = await sendWebhook('111', { secret: 'otro-secreto' });
+      expect(forged.status).toBe(401);
+
+      expect(getPayment).not.toHaveBeenCalled();
+      expect((await getOrderRow(orderId)).estado).toBe('pendiente');
+    } finally {
+      delete process.env.MP_WEBHOOK_MODO;
+    }
+  });
+
+  it('without a verifiable signature the notification is only a trigger: the API decides', async () => {
     const orderId = await createOrder(await getUserCookies());
-    getPayment.mockResolvedValue(mpPayment({ external_reference: orderId }));
 
-    const unsigned = await sendWebhook('111', { omitSignature: true });
-    expect(unsigned.status).toBe(401);
-    const forged = await sendWebhook('111', { secret: 'otro-secreto' });
-    expect(forged.status).toBe(401);
-
-    expect(getPayment).not.toHaveBeenCalled();
+    // Un tercero puede repetir un data.id, pero no puede inventar un pago aprobado:
+    // si el id no existe en esta cuenta, la orden no cambia.
+    getPayment.mockResolvedValueOnce(null);
+    expect((await sendWebhook('112', { secret: 'otro-secreto' })).status).toBe(200);
     expect((await getOrderRow(orderId)).estado).toBe('pendiente');
+
+    // Un pago real y aprobado de esa orden sí se aplica: es lo mismo que haría MP.
+    getPayment.mockResolvedValueOnce(mpPayment({ id: 113, external_reference: orderId }));
+    expect((await sendWebhook('113', { secret: 'otro-secreto' })).status).toBe(200);
+    expect((await getOrderRow(orderId)).estado).toBe('pagado');
   });
 
   it('marks the order paid when the approved payment matches, and deducts stock only once', async () => {

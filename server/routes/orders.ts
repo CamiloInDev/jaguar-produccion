@@ -3,7 +3,7 @@ import * as crypto from 'crypto';
 import { dbService } from '../db';
 import { env } from '../config/env';
 import { authenticateToken, requireRole, requireAdmin, AuthenticatedRequest } from '../middleware/auth';
-import { checkoutRateLimiter } from '../middleware/rateLimiter';
+import { checkoutRateLimiter, webhookRateLimiter } from '../middleware/rateLimiter';
 import { orderStatusValidation, handleValidationErrors } from '../middleware/validate';
 import { internalError } from '../middleware/errorHandler';
 import { OrderStatus, OrderItem, Order, ShippingAddress } from '../../src/types';
@@ -260,6 +260,16 @@ if (env.NODE_ENV !== 'production') {
 }
 
 /**
+ * Mercado Pago firmó con una clave distinta a `MP_WEBHOOK_SECRET` (caso 2026-10-22: el
+ * panel rotó la clave y la de Hostinger quedó obsoleta). Con `MP_WEBHOOK_MODO=estricto`
+ * se rechaza todo lo que no firme; por defecto se acepta y se valida contra la API.
+ * Se lee de `process.env` en cada request para poder cambiarlo sin recompilar.
+ */
+function exigeFirmaWebhook(): boolean {
+  return String(process.env.MP_WEBHOOK_MODO ?? 'api').trim().toLowerCase() === 'estricto';
+}
+
+/**
  * Webhook de Mercado Pago (Tus integraciones > Webhooks, evento "Pagos").
  * https://www.mercadopago.com.co/developers/es/docs/checkout-pro-preferences/payment-notifications
  *
@@ -268,7 +278,7 @@ if (env.NODE_ENV !== 'production') {
  * - 401 firma inválida · 500 si falla la consulta a MP (MP reintenta) · 200 en todo lo
  *   demás, incluidos casos que un reintento no arregla (orden inexistente, monto que no cuadra).
  */
-router.post('/mp-webhook', async (req, res) => {
+router.post('/mp-webhook', webhookRateLimiter, async (req, res) => {
   const queryDataId = typeof req.query['data.id'] === 'string' ? req.query['data.id'] : undefined;
   const bodyDataId = req.body?.data?.id != null ? String(req.body.data.id) : undefined;
   const dataId = queryDataId ?? bodyDataId;
@@ -281,14 +291,19 @@ router.post('/mp-webhook', async (req, res) => {
   });
   if (!valid) {
     // Log diagnóstico (la firma no es un secreto: es un HMAC sobre datos públicos del request).
-    console.warn('[MP] Webhook con firma inválida o ausente', JSON.stringify({
+    console.warn('[MP] Webhook con firma no verificable', JSON.stringify({
       path: req.url?.slice(0, 120),
       xSignature: String(req.header('x-signature') ?? '').slice(0, 100),
       xRequestId: req.header('x-request-id'),
       queryDataId,
       bodyDataId: bodyDataId ? 'presente' : 'ausente',
     }));
-    return res.status(401).json({ error: 'Firma inválida.' });
+    if (exigeFirmaWebhook()) return res.status(401).json({ error: 'Firma inválida.' });
+    // Modo por defecto: la notificación se usa SOLO como disparador y la decisión sale
+    // de la API (ver `applyPayment`): el pago tiene que existir en esta cuenta, su
+    // `external_reference` apuntar a una orden real y el monto/moneda coincidir. Un
+    // request falsificado no puede inventar un pago aprobado, así que no puede marcar
+    // nada como pagado; el peor caso es una consulta a MP (por eso el rate limit).
   }
 
   if (type !== 'payment' || !dataId) {

@@ -48,6 +48,22 @@ export const publicFormRateLimiter = rateLimit({
   }
 });
 
+/**
+ * Webhooks de la pasarela. No son usuarios: MP puede reintentar en ráfaga y cada aviso
+ * legítimo debe entrar. El límite es alto (corta un bucle de peticiones falsas, que
+ * cada una cuesta una consulta a la API de MP) pero no estorba a las notificaciones reales.
+ */
+export const webhookRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => isTestEnv,
+  handler: (_req, res) => {
+    res.status(429).json({ error: 'Demasiadas notificaciones.' });
+  }
+});
+
 export const checkoutRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
