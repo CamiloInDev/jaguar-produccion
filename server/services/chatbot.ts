@@ -107,6 +107,20 @@ SEGURIDAD
 ${catalog}`;
 }
 
+/**
+ * Contexto de navegación: en cuál página del sitio está el visitante (lo envía el
+ * widget en cada mensaje). Responde a la pregunta más común del bot: "¿ESTE producto?".
+ * El `page` es construido por el propio front (pathname) y se revalida aquí: solo se
+ * admite la forma de una ruta (`/letras y símbolos de URL`) para que un request
+ * forjado no pueda inyectar texto libre en el prompt del sistema.
+ */
+export function buildNavigationContext(page: string): string {
+  if (!/^\/[A-Za-z0-9\-_./?=&%+:~]{0,200}$/.test(page)) return '';
+  return `\n\n=== CONTEXTO DE NAVEGACIÓN ===\nEl visitante está en la página ${page} del sitio. ` +
+    `Si su mensaje dice "esto", "aquí" o refiere a "el producto/página", se trata de lo que está viendo en esa página; ` +
+    `búscalo en el catálogo para citar nombre y precio exactos. No menciones este dato en la respuesta salvo que aporte.\n`;
+}
+
 // -----------------------------------------------------------------------------
 // Sanitización de la entrada del usuario (defensa en profundidad, además de validator)
 // -----------------------------------------------------------------------------

@@ -5,7 +5,7 @@ import { chatRateLimiter } from '../middleware/rateLimiter';
 import { dbService } from '../db';
 import { env } from '../config/env';
 import {
-  isChatEnabled, getSystemPrompt, sanitizeUserMessage,
+  isChatEnabled, getSystemPrompt, sanitizeUserMessage, buildNavigationContext,
   streamCompletion, ChatProviderError, type ChatTurn,
 } from '../services/chatbot';
 
@@ -32,6 +32,9 @@ router.post(
   chatRateLimiter,
   body('message').isString().trim().isLength({ min: 1, max: 1000 }).withMessage('Mensaje inválido.'),
   body('session_id').matches(UUID_RE).withMessage('Sesión inválida.'),
+  // Ruta del sitio donde está el visitante (la manda el widget). Solo se usa si pasa la
+  // forma de una ruta; buildNavigationContext() la revalida contra inyección de prompt.
+  body('page').optional({ values: 'undefined' }).isString().isLength({ max: 200 }).withMessage('Página inválida.'),
   async (req, res) => {
     // Killswitch: con CHAT_BOT_ENABLED=false el endpoint no existe para el público.
     if (!isChatEnabled()) {
@@ -66,8 +69,12 @@ router.post(
       console.error('[CHAT] No se pudo guardar el mensaje del usuario:', (err as Error).message);
     });
 
+    const systemTurn: ChatTurn = {
+      role: 'system',
+      content: system + buildNavigationContext(String(req.body?.page ?? '')),
+    };
     const llmMessages: ChatTurn[] = [
-      { role: 'system', content: system },
+      systemTurn,
       ...history,
       { role: 'user', content: message },
     ];

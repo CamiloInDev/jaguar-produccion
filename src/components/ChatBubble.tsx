@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Bot, RefreshCcw, Send, X } from 'lucide-react';
+import { Bot, RefreshCcw, Send, Square, X } from 'lucide-react';
 
 // -----------------------------------------------------------------------------
 // Asistente Jaguar Coffee — chat propio (sin iframe de n8n desde 2026-10-15)
@@ -7,6 +7,8 @@ import { Bot, RefreshCcw, Send, X } from 'lucide-react';
 // - Habla con POST /api/chat (same-origin, streaming SSE).
 // - El historial de la conversación vive en este componente; el servidor solo
 //   guarda el historial anonimizado para que el modelo tenga contexto.
+// - Cada mensaje va acompañado de la ruta actual (page): así "¿este café?" o
+//   "¿cómo reservo aquí?" se responden con el producto que el usuario está viendo.
 // - Si el backend/proveedor falla, cae con gracia a WhatsApp (nunca se rompe).
 // -----------------------------------------------------------------------------
 
@@ -23,6 +25,13 @@ const SUGGESTIONS = [
   { label: 'Experiencias de café', prompt: 'Cuéntame sobre las experiencias de café y sus precios' },
   { label: 'Estadías caféteras', prompt: '¿Cómo funcionan el glamping y el eco-hostal? Precio y ubicación' },
   { label: 'Cursos SCA', prompt: '¿Qué cursos tiene la Academia y cuánto cuestan?' },
+];
+
+// Chips de seguimiento: se muestran después de cada respuesta para seguir sin teclear.
+const FOLLOWUPS = [
+  { label: '¿Cómo compro?', prompt: '¿Cómo compro un café en el sitio?' },
+  { label: '¿Cómo reservo?', prompt: '¿Cómo reservo una experiencia o estadía?' },
+  { label: 'Sobre los cursos', prompt: '¿Qué incluyen los cursos de la Academia?' },
 ];
 
 type Msg = { role: 'user' | 'assistant'; content: string };
@@ -76,11 +85,17 @@ function renderContent(text: string) {
 // -----------------------------------------------------------------------------
 // Conversación con el backend (SSE)
 // -----------------------------------------------------------------------------
-async function streamChat(sessionId: string, message: string, onDelta: (d: string) => void): Promise<void> {
+async function streamChat(
+  sessionId: string,
+  message: string,
+  onDelta: (d: string) => void,
+  signal?: AbortSignal,
+): Promise<void> {
   const res = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ session_id: sessionId, message }),
+    body: JSON.stringify({ session_id: sessionId, message, page: window.location.pathname }),
+    signal,
   });
 
   if (!res.ok) throw new Error(`chat ${res.status}`);
@@ -108,11 +123,14 @@ async function streamChat(sessionId: string, message: string, onDelta: (d: strin
         if (!t.startsWith('data:')) continue;
         const payload = t.slice(5).trim();
         if (payload === '[DONE]') return;
+        // El parseo de un fragmento incompleto se ignora; un error real del stream
+        // (error: 'stream'/'provider' del backend) SÍ debe interrumpir el flujo.
+        let json: { delta?: string; error?: string } | null = null;
         try {
-          const json = JSON.parse(payload) as { delta?: string; error?: string };
-          if (json.error) throw new Error('chat stream error');
-          if (json.delta) onDelta(json.delta);
+          json = JSON.parse(payload) as { delta?: string; error?: string };
         } catch { /* fragmento incompleto: se ignora */ }
+        if (json?.error) throw new Error('chat stream error');
+        if (json?.delta) onDelta(json.delta);
       }
     }
   }
@@ -128,6 +146,7 @@ export default function ChatBubble() {
   const [busy, setBusy] = useState(false);
   const [sessionId, setSessionId] = useState<string>('');
   const bottomRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   // Sesión anónima por navegador (el cliente la genera; el server solo la valida).
   useEffect(() => {
@@ -149,6 +168,10 @@ export default function ChatBubble() {
     setInput('');
     setMessages(prev => [...prev, { role: 'user', content: message }, { role: 'assistant', content: '' }]);
     setBusy(true);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+    let abortado = false;
     try {
       await streamChat(sessionId, message, (delta) => {
         setMessages(prev => {
@@ -157,28 +180,41 @@ export default function ChatBubble() {
           if (last?.role === 'assistant') next[next.length - 1] = { ...last, content: last.content + delta };
           return next;
         });
-      });
-    } catch {
-      setMessages(prev => {
-        const next = [...prev];
-        const last = next[next.length - 1];
-        if (last?.role === 'assistant' && last.content === '') next[next.length - 1] = FALLBACK_MSG;
-        else next.push(FALLBACK_MSG);
-        return next;
-      });
+      }, controller.signal);
+    } catch (err) {
+      abortado = (err as { name?: string })?.name === 'AbortError';
+      if (!abortado) {
+        setMessages(prev => {
+          const next = [...prev];
+          const last = next[next.length - 1];
+          if (last?.role === 'assistant' && last.content === '') next[next.length - 1] = FALLBACK_MSG;
+          else next.push(FALLBACK_MSG);
+          return next;
+        });
+      }
     } finally {
-      // Respuesta vacía del stream: se reemplaza por el fallback en vez de dejar un bubble en blanco.
+      // Respuesta vacía (stream corto o cancelada): sin bubble en blanco y sin un
+      // fallback falso cuando el propio usuario canceló.
       setMessages(prev => {
         const next = [...prev];
         const last = next[next.length - 1];
-        if (last?.role === 'assistant' && last.content.trim() === '') next[next.length - 1] = FALLBACK_MSG;
+        if (last?.role === 'assistant' && last.content.trim() === '') {
+          if (abortado) next.pop();
+          else next[next.length - 1] = FALLBACK_MSG;
+        }
         return next;
       });
+      abortRef.current = null;
       setBusy(false);
     }
   }, [busy, sessionId]);
 
+  const stop = useCallback(() => {
+    abortRef.current?.abort();
+  }, []);
+
   const resetConversation = useCallback(() => {
+    abortRef.current?.abort();
     const id = crypto.randomUUID();
     localStorage.setItem(SESSION_KEY, id);
     setSessionId(id);
@@ -244,6 +280,18 @@ export default function ChatBubble() {
                 ))}
               </div>
             )}
+
+            {/* Chips de seguimiento: después de cada respuesta, para seguir sin teclear */}
+            {!busy && messages.length > 1 && messages[messages.length - 1].role === 'assistant' && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {FOLLOWUPS.map(s => (
+                  <button key={s.label} onClick={() => send(s.prompt)}
+                    className="text-xs font-semibold text-[#122C9B] bg-white border border-[#122C9B]/20 rounded-full px-3 py-1.5 hover:bg-[#122C9B] hover:text-white hover:border-[#122C9B] transition-all">
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            )}
             <div ref={bottomRef} />
           </div>
 
@@ -269,9 +317,18 @@ export default function ChatBubble() {
             />
             <button type="submit" disabled={busy || !input.trim() || !sessionId}
               aria-label="Enviar mensaje"
-              className="bg-[#FFA42C] disabled:opacity-40 disabled:cursor-not-allowed text-white p-2.5 rounded-xl hover:bg-[#e89420] transition-all active:scale-95">
+              className="bg-[#FFA42C] disabled:opacity-40 disabled:cursor-not-allowed text-white p-2.5 rounded-xl hover:bg-[#e89420] transition-all active:scale-95"
+              hidden={busy}>
               <Send className="w-4 h-4" />
             </button>
+            {busy && (
+              <button type="button" onClick={stop}
+                aria-label="Detener respuesta"
+                title="Detener"
+                className="bg-[#122C9B]/10 text-[#122C9B] p-2.5 rounded-xl hover:bg-[#122C9B]/20 transition-all active:scale-95">
+                <Square className="w-4 h-4" />
+              </button>
+            )}
           </form>
         </div>
       )}
