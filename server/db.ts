@@ -881,6 +881,16 @@ export const dbService = {
     return rows.length ? Number(rows[0].token_version) : 0;
   },
 
+  /**
+   * Sube token_version sin tocar la contraseña: invalida TODAS las sesiones JWT
+   * emitidas para el usuario (ver middleware/auth.ts, que compara `tv` del token).
+   * logout la usa para que una cookie robada/copada deje de servir incluso si el
+   * navegador nunca llegó a borrarla.
+   */
+  async revokeUserSessions(userId: string): Promise<void> {
+    await pool.query('UPDATE users SET token_version = token_version + 1 WHERE id = ?', [userId]);
+  },
+
   // --------------------------------------------------------------------------
   // Reservations / Booking Calendar
   // --------------------------------------------------------------------------

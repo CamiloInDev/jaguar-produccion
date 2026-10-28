@@ -109,7 +109,20 @@ router.post('/login', authRateLimiter, loginValidation, handleValidationErrors, 
   }
 });
 
-router.post('/logout', (_req, res) => {
+router.post('/logout', async (req, res) => {
+  // No basta con clearCookie: si la cookie fue copiada/robada (XSS, equipo compartido),
+  // seguiría siendo válida hasta el exp del JWT (7 días). Se revoca subiendo
+  // token_version, que invalida todas las sesiones emitidas antes. Token ausente o
+  // vencido: no hay nada que revocar, y logout responde 200 igual (idempotente).
+  const token = req.cookies?.token;
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, env.JWT_SECRET, { issuer: 'cafe-jaguar', audience: env.APP_URL }) as { id?: string };
+      if (decoded?.id) {
+        await dbService.revokeUserSessions(String(decoded.id));
+      }
+    } catch { /* sesión inválida o expirada */ }
+  }
   res.clearCookie('token');
   return res.json({ success: true, message: 'Sesión cerrada exitosamente.' });
 });
@@ -146,24 +159,31 @@ router.put('/perfil', authenticateToken, profileUpdateValidation, handleValidati
 });
 
 router.post('/recuperar', authRateLimiter, requestPasswordResetValidation, handleValidationErrors, async (req, res) => {
+  const { email } = req.body;
+  const GENERIC_MESSAGE = 'Si el correo está registrado, recibirás un enlace para restablecer tu contraseña.';
+
   try {
-    const { email } = req.body;
-    const GENERIC_MESSAGE = 'Si el correo está registrado, recibirás un enlace para restablecer tu contraseña.';
-
     const user = await dbService.getUserByEmail(email);
-    if (!user) {
-      // No revelar si el email existe — misma respuesta genérica
-      return res.json({ success: true, message: GENERIC_MESSAGE });
+    if (user) {
+      // Token y correo se generan/envían SIN esperarlos en la respuesta: el endpoint
+      // siempre responde el mismo 200 genérico de inmediato, exista o no el correo,
+      // y una falla de SMTP ya no rompe la recuperación (500) ni delata cuentas
+      // registradas por tiempo de respuesta. El fallo queda en log para diagnóstico.
+      const target = user;
+      void (async () => {
+        const rawToken = await dbService.createPasswordResetToken(target.id);
+        const resetUrl = `${env.APP_URL}/auth/restablecer?token=${rawToken}`;
+        await sendPasswordResetEmail(target.email, resetUrl);
+      })().catch((err) => {
+        console.error(`[MAILER] Correo de recuperación falló: ${(err as Error).message}`);
+      });
     }
-
-    const rawToken = await dbService.createPasswordResetToken(user.id);
-    const resetUrl = `${env.APP_URL}/auth/restablecer?token=${rawToken}`;
-    await sendPasswordResetEmail(user.email, resetUrl);
-
-    return res.json({ success: true, message: GENERIC_MESSAGE });
-  } catch (err: any) {
-    return res.status(500).json({ error: 'No fue posible procesar la solicitud. Intenta de nuevo.' });
+  } catch (err) {
+    // BD caída u otro error interno: mismo 200 genérico (no revela estado ni cuentas).
+    console.error(`[AUTH] /recuperar: ${(err as Error).message}`);
   }
+
+  return res.json({ success: true, message: GENERIC_MESSAGE });
 });
 
 router.post('/restablecer', authRateLimiter, resetPasswordValidation, handleValidationErrors, async (req, res) => {

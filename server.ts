@@ -143,6 +143,13 @@ app.use('/api/reservas', reservationRoutes);
 app.use('/api/usuarios', userRoutes);
 app.use('/api/chat', chatRoutes);
 
+// Cualquier petición que no haya casado con una ruta /api (ruta o método inexistente):
+// 404 JSON para TODOS los métodos. Sin esto, un DELETE/GET no registrado caía en el
+// 404 por defecto de Express, que responde HTML.
+app.use('/api', (_req, res) => {
+  res.status(404).json({ error: 'No encontrado.' });
+});
+
 // Purga de conversaciones viejas del asistente (>90 días): una vez por arranque.
 // Si el bot está desactivado no hay por qué tocar la tabla.
 if (isChatEnabled()) {

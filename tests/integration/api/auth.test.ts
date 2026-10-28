@@ -134,10 +134,34 @@ describe('PUT /api/auth/perfil', () => {
 });
 
 describe('POST /api/auth/logout', () => {
+  // El resto de suites cambia contraseñas de cliente@test.com; re-sembrar deja
+  // el estado conocido para probar login + logout + revocación.
+  beforeEach(async () => {
+    const helpers = await import('../../helpers');
+    await helpers.createTestDb();
+  });
+
   it('clears the token cookie', async () => {
     const res = await request(app).post('/api/auth/logout');
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
+  });
+
+  it('revokes the issued token: the pre-logout cookie no longer works (H-02)', async () => {
+    const login = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'cliente@test.com', password: 'cliente123' });
+    expect(login.status).toBe(200);
+    const cookie = login.headers['set-cookie'];
+    expect(cookie).toBeDefined();
+
+    // La cookie sigue presentándose a mano (como haría un token copiado): tras el
+    // logout debe estar revocada vía token_version, no solo borrada del navegador.
+    const out = await request(app).post('/api/auth/logout').set('Cookie', cookie);
+    expect(out.status).toBe(200);
+
+    const me = await request(app).get('/api/auth/me').set('Cookie', cookie);
+    expect(me.status).toBe(401);
   });
 });
 
@@ -263,5 +287,22 @@ describe('PUT /api/auth/password', () => {
       .put('/api/auth/password')
       .send({ currentPassword: 'cliente123', newPassword: 'otraClave123' });
     expect(res.status).toBe(401);
+  });
+});
+
+describe('Manejo de errores de petición (H-04)', () => {
+  it('responds 400 (not 500) with malformed JSON body', async () => {
+    const res = await request(app)
+      .post('/api/auth/login')
+      .set('Content-Type', 'application/json')
+      .send('{"email": "roto');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('JSON');
+  });
+
+  it('responds JSON 404 for unsupported methods on /api (not Express HTML)', async () => {
+    const res = await request(app).delete('/api/auth/login');
+    expect(res.status).toBe(404);
+    expect(res.headers['content-type']).toContain('application/json');
   });
 });

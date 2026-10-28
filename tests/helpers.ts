@@ -126,5 +126,12 @@ export async function createTestApp() {
   app.use('/api/contacto', contactRoutes);
   app.use('/api/reservas', reservationRoutes);
 
+  // Espejo de server.ts: 404 JSON para rutas/métodos /api inexistentes y
+  // errorHandler global (400 en JSON malformado).
+  app.use('/api', (_req: any, res: any) => res.status(404).json({ error: 'No encontrado.' }));
+
+  const { errorHandler } = await import('../server/middleware/errorHandler');
+  app.use(errorHandler);
+
   return app;
 }
