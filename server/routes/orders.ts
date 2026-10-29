@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as crypto from 'crypto';
-import { dbService } from '../db';
+import { dbService, StockInsuficienteError } from '../db';
+import { notifyOrderTransition } from '../services/order-notifications';
 import { env } from '../config/env';
 import { authenticateToken, requireRole, requireAdmin, AuthenticatedRequest } from '../middleware/auth';
 import { checkoutRateLimiter, webhookRateLimiter } from '../middleware/rateLimiter';
@@ -98,17 +99,14 @@ function buildPreferenceBody(order: Order, payer: { email: string; nombre?: stri
       auto_return: 'approved',
       notification_url: `${env.APP_URL}/api/ordenes/mp-webhook`,
     } : {}),
-    ...(excluded.length || env.MP_MAX_INSTALLMENTS ? {
-      payment_methods: {
-        ...(excluded.length ? { excluded_payment_types: excluded } : {}),
-        ...(env.MP_MAX_INSTALLMENTS ? { installments: env.MP_MAX_INSTALLMENTS } : {}),
-      },
-    } : {}),
-    ...(env.MP_PREFERENCE_EXPIRATION_MINUTES ? {
-      expires: true,
-      expiration_date_from: new Date().toISOString(),
-      expiration_date_to: new Date(Date.now() + env.MP_PREFERENCE_EXPIRATION_MINUTES * 60_000).toISOString(),
-    } : {}),
+    payment_methods: {
+      ...(excluded.length ? { excluded_payment_types: excluded } : {}),
+      installments: env.MP_MAX_INSTALLMENTS,
+    },
+    // El link vence: así una orden abandonada no aparta stock para siempre (ver vencerPedidosAbandonados).
+    expires: true,
+    expiration_date_from: new Date().toISOString(),
+    expiration_date_to: new Date(Date.now() + env.MP_PREFERENCE_EXPIRATION_MINUTES * 60_000).toISOString(),
   };
 }
 
@@ -132,15 +130,21 @@ router.post('/crear-pago', authenticateToken, checkoutRateLimiter, async (req: A
     const user = await dbService.getUserById(req.user!.id);
     if (!user) return res.status(401).json({ error: 'Inicie sesión para continuar.' });
 
-    order = await dbService.createOrder({
-      id: newOrderId(),
-      user_id: user.id,
-      estado: 'pendiente',
-      total: verified.total,
-      direccion_envio,
-      notas,
-      items: verified.items,
-    });
+    try {
+      order = await dbService.createOrder({
+        id: newOrderId(),
+        user_id: user.id,
+        estado: 'pendiente',
+        total: verified.total,
+        direccion_envio,
+        notas,
+        items: verified.items,
+      });
+    } catch (err) {
+      // Otro comprador apartó las últimas unidades entre la validación y la creación.
+      if (err instanceof StockInsuficienteError) return res.status(409).json({ error: err.message });
+      throw err;
+    }
 
     try {
       const pref = await mercadopago.createPreference(buildPreferenceBody(order, user), `pref-${order.id}`);
@@ -227,10 +231,12 @@ router.get('/:id', authenticateToken, async (req: AuthenticatedRequest, res) => 
 router.put('/:id/estado', authenticateToken, requireRole('admin', 'support'), orderStatusValidation, handleValidationErrors, async (req, res) => {
   try {
     const { estado } = req.body;
-    const updated = await dbService.updateOrderState(req.params.id, estado as OrderStatus);
-    if (!updated) {
+    const before = await dbService.getOrderById(req.params.id);
+    const updated = before ? await dbService.updateOrderState(req.params.id, estado as OrderStatus) : null;
+    if (!before || !updated) {
       return res.status(404).json({ error: 'Orden no encontrada.' });
     }
+    notifyOrderTransition(updated, before.estado);
     return res.json({ success: true, order: updated });
   } catch (err: any) {
     return internalError(res, err);

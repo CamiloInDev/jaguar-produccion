@@ -186,8 +186,41 @@ describe('POST /api/ordenes/crear-pago', () => {
     expect(res.status).toBe(502);
     expect(res.body.error).not.toContain('MP down');
 
-    const [rows] = await pool.query("SELECT estado FROM orders ORDER BY created_at DESC LIMIT 1");
+    const [rows] = await pool.query("SELECT estado, stock_reservado FROM orders ORDER BY created_at DESC LIMIT 1");
     expect(rows[0].estado).toBe('cancelado');
+    expect(rows[0].stock_reservado).toBe(0); // las unidades apartadas volvieron al inventario
+  });
+
+  it('sends the payment rules to Mercado Pago: no Efecty, 1 installment, link valid 2 hours', async () => {
+    const cookies = await getUserCookies();
+    const res = await request(app)
+      .post('/api/ordenes/crear-pago')
+      .set('Cookie', cookies)
+      .send({ items: [{ product_id: 'prod_1', cantidad: 1 }], direccion_envio: ADDRESS });
+    expect(res.status).toBe(201);
+    const body = createPreference.mock.calls[0][0];
+    expect(body.payment_methods?.excluded_payment_types).toEqual([{ id: 'ticket' }]);
+    expect(body.payment_methods?.installments).toBe(1);
+    expect(body.expires).toBe(true);
+    const vigencia = Date.parse(body.expiration_date_to!) - Date.parse(body.expiration_date_from!);
+    expect(Math.round(vigencia / 60_000)).toBe(120);
+  });
+
+  it('returns 409 when another buyer took the last units between validation and checkout', async () => {
+    const cookies = await getUserCookies();
+    const disponible = await getStock();
+    // Dos compradores piden todo lo que queda a la vez: solo uno puede apartarlo.
+    const [a, b] = await Promise.all([
+      request(app).post('/api/ordenes/crear-pago').set('Cookie', cookies).send({ items: [{ product_id: 'prod_1', cantidad: disponible }], direccion_envio: ADDRESS }),
+      request(app).post('/api/ordenes/crear-pago').set('Cookie', cookies).send({ items: [{ product_id: 'prod_1', cantidad: disponible }], direccion_envio: ADDRESS }),
+    ]);
+    expect([a.status, b.status].sort()).toEqual([201, 409]);
+    expect(await getStock()).toBe(0);
+
+    // Devuelve el stock para los demás tests.
+    const ganadora = a.status === 201 ? a.body.orderId : b.body.orderId;
+    await request(app).put(`/api/ordenes/${ganadora}/estado`).set('Cookie', await getAdminCookies()).send({ estado: 'cancelado' });
+    expect(await getStock()).toBe(disponible);
   });
 });
 
@@ -225,10 +258,11 @@ describe('POST /api/ordenes/mp-webhook', () => {
     expect((await getOrderRow(orderId)).estado).toBe('pagado');
   });
 
-  it('marks the order paid when the approved payment matches, and deducts stock only once', async () => {
-    const orderId = await createOrder(await getUserCookies(), 2);
-    getPayment.mockResolvedValue(mpPayment({ id: 555, external_reference: orderId, transaction_amount: 50000 }));
+  it('marks the order paid when the approved payment matches; stock was reserved once at checkout', async () => {
     const stockBefore = await getStock();
+    const orderId = await createOrder(await getUserCookies(), 2);
+    expect(await getStock()).toBe(stockBefore - 2); // apartado al crear el pedido
+    getPayment.mockResolvedValue(mpPayment({ id: 555, external_reference: orderId, transaction_amount: 50000 }));
 
     const first = await sendWebhook('555');
     expect(first.status).toBe(200);
@@ -242,6 +276,19 @@ describe('POST /api/ordenes/mp-webhook', () => {
     const retry = await sendWebhook('555');
     expect(retry.status).toBe(200);
     expect(await getStock()).toBe(stockBefore - 2);
+  });
+
+  it('a refund cancels the paid order and returns its units to the inventory', async () => {
+    const stockBefore = await getStock();
+    const orderId = await createOrder(await getUserCookies(), 1);
+    getPayment.mockResolvedValue(mpPayment({ id: 556, external_reference: orderId }));
+    await sendWebhook('556');
+    expect((await getOrderRow(orderId)).estado).toBe('pagado');
+
+    getPayment.mockResolvedValue(mpPayment({ id: 556, external_reference: orderId, status: 'refunded' }));
+    await sendWebhook('556');
+    expect((await getOrderRow(orderId)).estado).toBe('cancelado');
+    expect(await getStock()).toBe(stockBefore);
   });
 
   it('does not mark paid when the amount or currency does not match the order (responds 200)', async () => {
@@ -363,9 +410,9 @@ describe('POST /api/ordenes/:id/verificar-pago', () => {
 
   it('is safe when the webhook and the return verification arrive at the same time', async () => {
     const cookies = await getUserCookies();
+    const stockBefore = await getStock();
     const orderId = await createOrder(cookies, 3);
     getPayment.mockResolvedValue(mpPayment({ id: 1004, external_reference: orderId, transaction_amount: 75000 }));
-    const stockBefore = await getStock();
 
     await Promise.all([
       sendWebhook('1004'),

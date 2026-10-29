@@ -2,6 +2,7 @@ import { dbService } from '../db';
 import { Order } from '../../src/types';
 import * as mercadopago from './mercadopago';
 import { decidePaymentTransition, EXTERNAL_REFERENCE_RE } from './paymentRules';
+import { notifyOrderTransition } from './order-notifications';
 
 export type ApplyPaymentResult =
   | { kind: 'applied'; order: Order; changed: boolean }
@@ -37,6 +38,7 @@ export async function applyPayment(paymentId: string, expectedOrderId?: string):
   if (alert) console.error(`[MP][ALERTA] orden ${reference}, pago ${payment.id} (${payment.status}): ${alert}`);
   if (result.changed) {
     console.log(`[MP] orden ${reference}: ${result.previous} → ${result.order.estado} (pago ${payment.id}, ${payment.status})`);
+    notifyOrderTransition(result.order, result.previous);
   }
   return { kind: 'applied', order: result.order, changed: result.changed };
 }

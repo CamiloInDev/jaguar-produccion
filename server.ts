@@ -29,6 +29,7 @@ import { buildSeo, sitemapUrls, clearSeoCache } from './server/seo';
 import { invalidateCatalogCache, isChatEnabled } from './server/services/chatbot';
 import { dbService } from './server/db';
 import { startReconciliacionPagos } from './server/jobs/reconciliar-pagos';
+import { ensureSchemaUpgrades } from './server/config/schema-upgrades';
 
 // -----------------------------------------------------------------------------
 // Global error handlers to catch ALL crashes
@@ -199,6 +200,10 @@ app.use(errorHandler);
 // -----------------------------------------------------------------------------
 async function start() {
   try {
+    // Columnas nuevas se agregan solas; si falla (BD caída, permisos) el sitio igual arranca
+    // y el error queda en el log para corregirlo.
+    await ensureSchemaUpgrades().catch(err => console.error(`[DB] No se pudo actualizar el esquema: ${err.message}`));
+
     if (env.NODE_ENV !== 'production') {
       console.log('Starting Vite dev server...');
       const vite = await createViteServer({

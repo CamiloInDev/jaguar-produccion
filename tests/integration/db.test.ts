@@ -189,27 +189,89 @@ describe('DB Service - Orders & Stock', () => {
     expect(order.estado).toBe('pendiente');
   });
 
-  it('order does not deduct stock when pending', async () => {
+  const envio = { direccion: 'Calle 123', ciudad: 'Bogotá', departamento: 'Cundinamarca', telefono: '3000000000' };
+  const stockDe = async (id: string) => {
     const { dbService } = await import('../../server/db');
+    return (await dbService.getProductById(id))!.stock;
+  };
+
+  it('a pending order reserves its units right away', async () => {
+    const { dbService } = await import('../../server/db');
+    const antes = await stockDe('prod_1');
     await dbService.createOrder({
-      user_id: 'usr_cliente', total: 50000,
-      direccion_envio: { direccion: 'Calle 123', ciudad: 'Bogotá', departamento: 'Cundinamarca', telefono: '3000000000' },
-      items: [{ product_id: 'prod_1', nombre: 'Test Product', precio_unit: 25000, cantidad: 30 }],
+      user_id: 'usr_cliente', total: 50000, direccion_envio: envio,
+      items: [{ product_id: 'prod_1', nombre: 'Test Product', precio_unit: 25000, cantidad: 3 }],
     });
-    const p = await dbService.getProductById('prod_1');
-    expect(p!.stock).toBe(50);
+    expect(await stockDe('prod_1')).toBe(antes - 3);
   });
 
-  it('deducts stock when order becomes pagado', async () => {
+  it('paying a pending order does not deduct the units a second time', async () => {
     const { dbService } = await import('../../server/db');
+    const antes = await stockDe('prod_1');
     const order = await dbService.createOrder({
-      id: 'ORDER-TEST-DEDUCT', user_id: 'usr_cliente', total: 50000,
-      direccion_envio: { direccion: 'Calle 123', ciudad: 'Bogotá', departamento: 'Cundinamarca', telefono: '3000000000' },
-      items: [{ product_id: 'prod_1', nombre: 'Test', precio_unit: 25000, cantidad: 10 }],
+      id: 'ORDER-TEST-DEDUCT', user_id: 'usr_cliente', total: 50000, direccion_envio: envio,
+      items: [{ product_id: 'prod_1', nombre: 'Test', precio_unit: 25000, cantidad: 2 }],
     });
     await dbService.updateOrderState(order.id, 'pagado');
-    const p = await dbService.getProductById('prod_1');
-    expect(p!.stock).toBe(40);
+    await dbService.updateOrderState(order.id, 'enviado');
+    expect(await stockDe('prod_1')).toBe(antes - 2);
+  });
+
+  it('cancelling releases the reserved units exactly once', async () => {
+    const { dbService } = await import('../../server/db');
+    const antes = await stockDe('prod_1');
+    const order = await dbService.createOrder({
+      user_id: 'usr_cliente', total: 25000, direccion_envio: envio,
+      items: [{ product_id: 'prod_1', nombre: 'Test', precio_unit: 25000, cantidad: 4 }],
+    });
+    await dbService.updateOrderState(order.id, 'cancelado');
+    await dbService.updateOrderState(order.id, 'cancelado');
+    expect(await stockDe('prod_1')).toBe(antes);
+  });
+
+  it('cancelling a paid order (refund) returns its units; re-paying takes them again', async () => {
+    const { dbService } = await import('../../server/db');
+    const antes = await stockDe('prod_1');
+    const order = await dbService.createOrder({
+      user_id: 'usr_cliente', total: 25000, direccion_envio: envio,
+      items: [{ product_id: 'prod_1', nombre: 'Test', precio_unit: 25000, cantidad: 1 }],
+    });
+    await dbService.updateOrderState(order.id, 'pagado');
+    await dbService.updateOrderState(order.id, 'cancelado');
+    expect(await stockDe('prod_1')).toBe(antes);
+    await dbService.updateOrderState(order.id, 'pagado');
+    expect(await stockDe('prod_1')).toBe(antes - 1);
+  });
+
+  it('refuses a pending order when there are not enough units, without touching stock', async () => {
+    const { dbService, StockInsuficienteError } = await import('../../server/db');
+    const antes = await stockDe('prod_1');
+    await expect(dbService.createOrder({
+      user_id: 'usr_cliente', total: 25000, direccion_envio: envio,
+      items: [{ product_id: 'prod_1', nombre: 'Test', precio_unit: 25000, cantidad: antes + 1 }],
+    })).rejects.toBeInstanceOf(StockInsuficienteError);
+    expect(await stockDe('prod_1')).toBe(antes);
+  });
+
+  it('an old pending order (no reservation) deducts once when paid and releases nothing when cancelled', async () => {
+    const { dbService } = await import('../../server/db');
+    const { pool } = await import('../../server/config/db-pool');
+    const pagada = await dbService.createOrder({
+      user_id: 'usr_cliente', total: 25000, direccion_envio: envio,
+      items: [{ product_id: 'prod_1', nombre: 'Test', precio_unit: 25000, cantidad: 1 }],
+    });
+    const cancelada = await dbService.createOrder({
+      user_id: 'usr_cliente', total: 25000, direccion_envio: envio,
+      items: [{ product_id: 'prod_1', nombre: 'Test', precio_unit: 25000, cantidad: 1 }],
+    });
+    // Simula órdenes creadas antes de existir el apartado: stock devuelto y marca en 0.
+    await pool.query('UPDATE products SET stock = stock + 2 WHERE id = ?', ['prod_1']);
+    await pool.query('UPDATE orders SET stock_reservado = 0 WHERE id IN (?, ?)', [pagada.id, cancelada.id]);
+    const antes = await stockDe('prod_1');
+
+    await dbService.updateOrderState(pagada.id, 'pagado');
+    await dbService.updateOrderState(cancelada.id, 'cancelado');
+    expect(await stockDe('prod_1')).toBe(antes - 1);
   });
 
   it('gets orders for a specific user', async () => {

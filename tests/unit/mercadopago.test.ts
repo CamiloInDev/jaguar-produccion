@@ -51,10 +51,16 @@ describe('decidePaymentTransition', () => {
     expect(shipped.alert).toBeTruthy();
   });
 
-  it('a late approval on a cancelled order is flagged, not silently re-opened', () => {
+  it('a late approval on a cancelled (expired) order re-opens it as paid and alerts the admin', () => {
     const d = decidePaymentTransition({ estado: 'cancelado', total: 25000 }, { status: 'approved', ...ok });
-    expect(d.next).toBeNull();
+    expect(d.next).toBe('pagado');
+    expect(d.recordPayment).toBe(true);
     expect(d.alert).toBeTruthy();
+  });
+
+  it('a late approval with a wrong amount on a cancelled order changes nothing', () => {
+    const d = decidePaymentTransition({ estado: 'cancelado', total: 25000 }, { status: 'approved', currency_id: 'COP', transaction_amount: 1000 });
+    expect(d.next).toBeNull();
   });
 });
 

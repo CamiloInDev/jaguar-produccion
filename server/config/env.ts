@@ -21,13 +21,14 @@ const envSchema = z.object({
   MP_WEBHOOK_SECRET: z.string().min(1, 'MP_WEBHOOK_SECRET is required'),
   // Texto en el extracto de la tarjeta del comprador (máx. 13 caracteres según Mercado Pago)
   MP_STATEMENT_DESCRIPTOR: z.string().min(1).max(13).default('JAGUARCOFFEE'),
-  // Decisiones de producto, opcionales — sin definir se usa el comportamiento por defecto de MP:
-  // tipos de pago a excluir separados por coma (ej. "ticket" quita Efecty; "bank_transfer" quita PSE)
-  MP_EXCLUDED_PAYMENT_TYPES: z.string().optional(),
+  // Decisiones de producto (2026-10-29): sin Efecty, 1 cuota y link de pago de 2 horas.
+  // Se pueden cambiar por variable de entorno sin tocar código.
+  // tipos de pago a excluir separados por coma ("ticket" quita Efecty; "bank_transfer" quita PSE; vacío = ninguno)
+  MP_EXCLUDED_PAYMENT_TYPES: z.string().default('ticket'),
   // tope de cuotas con tarjeta de crédito (1–36)
-  MP_MAX_INSTALLMENTS: z.coerce.number().int().min(1).max(36).optional(),
-  // minutos que el link de pago sigue siendo válido después de crearlo
-  MP_PREFERENCE_EXPIRATION_MINUTES: z.coerce.number().int().min(5).optional(),
+  MP_MAX_INSTALLMENTS: z.preprocess(v => (v === '' ? undefined : v), z.coerce.number().int().min(1).max(36).default(1)),
+  // minutos que el link de pago sigue siendo válido; al vencer, la orden se cancela y libera el stock apartado
+  MP_PREFERENCE_EXPIRATION_MINUTES: z.preprocess(v => (v === '' ? undefined : v), z.coerce.number().int().min(5).default(120)),
 
   // Application
   APP_URL: z.string().url().default('http://localhost:3000'),
@@ -52,6 +53,8 @@ const envSchema = z.object({
   SMTP_USER: z.string().min(1).optional(),
   SMTP_PASSWORD: z.string().min(1).optional(),
   SMTP_FROM: z.string().min(1).optional(),
+  // Buzón que recibe el aviso de cada venta nueva y de reembolsos (por defecto, el de soporte)
+  ORDERS_NOTIFY_EMAIL: z.string().email().default('support.coffe.jaguar@gmail.com'),
 
   // Asistente de chat (POST /api/chat). Proveedor LLM compatible con la API de
   // OpenAI (chat/completions): sirve OpenAI directo o el endpoint compatible de

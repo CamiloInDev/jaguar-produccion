@@ -154,6 +154,7 @@ CREATE TABLE IF NOT EXISTS orders (
   id                   VARCHAR(80) NOT NULL PRIMARY KEY,
   user_id              VARCHAR(64) NOT NULL,
   estado               ENUM('pendiente','pagado','enviado','entregado','cancelado') NOT NULL DEFAULT 'pendiente',
+  stock_reservado      TINYINT(1)  NOT NULL DEFAULT 0, -- 1 = sus unidades están descontadas del inventario (se agrega sola al arrancar, ver server/config/schema-upgrades.ts)
   total                INT         NOT NULL,
   payment_id           VARCHAR(120) NULL,   -- id del pago en Mercado Pago (último aplicado)
   preference_id        VARCHAR(120) NULL,   -- id de la preferencia de Checkout Pro

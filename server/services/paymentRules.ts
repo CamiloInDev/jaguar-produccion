@@ -43,8 +43,10 @@ export function decidePaymentTransition(
       }
       if (estado === 'pendiente') return { next: 'pagado', recordPayment: true };
       if (estado === 'cancelado') {
-        // Llegó tarde (p. ej. PSE lento después de cancelar): el stock pudo haberse vendido.
-        return { next: null, recordPayment: true, alert: 'pago aprobado sobre una orden ya cancelada — revisar stock y decidir si despachar o reembolsar' };
+        // Llegó tarde (p. ej. PSE lento después de que el link venció y se liberó el stock).
+        // El cliente ya pagó: la orden se reactiva y vuelve a descontar inventario; el admin
+        // revisa si quedaban unidades (si no, despacha cuando haya o reembolsa).
+        return { next: 'pagado', recordPayment: true, alert: 'pago aprobado sobre una orden que estaba cancelada — se reactivó como pagada, revisar que haya stock para despachar' };
       }
       return { next: null, recordPayment: false };
     }

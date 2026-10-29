@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { hashPassword } from '../server/db';
 import { pool } from '../server/config/db-pool';
+import { ensureSchemaUpgrades } from '../server/config/schema-upgrades';
 
 export const JWT_SECRET = process.env.JWT_SECRET || 'test_jwt_secret_key_at_least_32_chars_long_12345';
 
@@ -45,6 +46,7 @@ export async function restoreRealDb(): Promise<void> {
 
 /** Crea el set de datos de fixture en jaguar_test (reemplaza el viejo db.json). */
 export async function createTestDb() {
+  await ensureSchemaUpgrades();
   await truncateTestDb();
   const now = new Date().toISOString();
 

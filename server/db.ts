@@ -207,6 +207,44 @@ async function loadOrderItems(orderIds: string[]): Promise<Record<string, OrderI
   return grouped;
 }
 
+/** No hay unidades suficientes para apartar una orden nueva. */
+export class StockInsuficienteError extends Error {
+  constructor(public readonly producto: string) {
+    super(`Stock insuficiente para "${producto}".`);
+  }
+}
+
+/**
+ * Estados en los que una orden tiene sus unidades descontadas del inventario: se apartan al
+ * crear la orden (pendiente) y se devuelven solo si termina cancelada (pago rechazado/vencido,
+ * reembolso o cancelación del admin).
+ */
+const ESTADOS_CON_STOCK: OrderStatus[] = ['pendiente', 'pagado', 'enviado', 'entregado'];
+
+type Conn = Awaited<ReturnType<typeof pool.getConnection>>;
+
+/**
+ * Deja el inventario coherente con el estado `next` de una orden ya bloqueada (FOR UPDATE)
+ * dentro de `conn`. `stock_reservado` dice si sus unidades están descontadas hoy, así que
+ * llamarla dos veces no descuenta ni devuelve dos veces.
+ */
+async function syncOrderStock(conn: Conn, orderId: string, next: OrderStatus): Promise<void> {
+  const [rows] = await conn.query<RowDataPacket[]>('SELECT stock_reservado FROM orders WHERE id = ? LIMIT 1', [orderId]);
+  const reservado = toBool(rows[0]?.stock_reservado);
+  const debeReservar = ESTADOS_CON_STOCK.includes(next);
+  if (rows.length === 0 || reservado === debeReservar) return;
+
+  const [items] = await conn.query<RowDataPacket[]>('SELECT product_id, cantidad FROM order_items WHERE order_id = ?', [orderId]);
+  for (const item of items) {
+    if (debeReservar) {
+      await conn.query('UPDATE products SET stock = GREATEST(0, stock - ?) WHERE id = ?', [item.cantidad, item.product_id]);
+    } else {
+      await conn.query('UPDATE products SET stock = stock + ? WHERE id = ?', [item.cantidad, item.product_id]);
+    }
+  }
+  await conn.query('UPDATE orders SET stock_reservado = ? WHERE id = ?', [debeReservar ? 1 : 0, orderId]);
+}
+
 const slugify = (nombre: string): string =>
   nombre.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 
@@ -588,11 +626,22 @@ export const dbService = {
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
+      // Una orden pendiente APARTA sus unidades: el UPDATE condicional garantiza que dos
+      // compradores no se lleven la última unidad a la vez (el segundo recibe el error).
+      if (estado === 'pendiente') {
+        for (const item of order.items) {
+          const [res] = await conn.query<ResultSetHeader>(
+            'UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?',
+            [item.cantidad, item.product_id, item.cantidad]
+          );
+          if (res.affectedRows === 0) throw new StockInsuficienteError(item.nombre);
+        }
+      }
       await conn.query(
-        `INSERT INTO orders (id, user_id, estado, total, payment_id, preference_id, direccion_envio, notas, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [id, order.user_id, estado, order.total, order.payment_id ?? null, order.preference_id ?? null,
-         JSON.stringify(order.direccion_envio), order.notas ?? null, created_at]
+        `INSERT INTO orders (id, user_id, estado, stock_reservado, total, payment_id, preference_id, direccion_envio, notas, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, order.user_id, estado, estado === 'pendiente' ? 1 : 0, order.total, order.payment_id ?? null,
+         order.preference_id ?? null, JSON.stringify(order.direccion_envio), order.notas ?? null, created_at]
       );
       for (const item of order.items) {
         await conn.query(
@@ -600,11 +649,7 @@ export const dbService = {
           [id, item.product_id, item.nombre, item.precio_unit, item.cantidad]
         );
       }
-      if (estado === 'pagado') {
-        for (const item of order.items) {
-          await conn.query('UPDATE products SET stock = GREATEST(0, stock - ?) WHERE id = ?', [item.cantidad, item.product_id]);
-        }
-      }
+      if (estado !== 'pendiente') await syncOrderStock(conn, id, estado);
       await conn.commit();
     } catch (err) {
       await conn.rollback();
@@ -637,15 +682,9 @@ export const dbService = {
         return null;
       }
       const previousState = rows[0].estado as OrderStatus;
-      await conn.query('UPDATE orders SET estado = ? WHERE id = ?', [estado, id]);
-
-      if (estado === 'pagado' && previousState !== 'pagado') {
-        const [itemRows] = await conn.query<RowDataPacket[]>(
-          'SELECT product_id, cantidad FROM order_items WHERE order_id = ?', [id]
-        );
-        for (const item of itemRows) {
-          await conn.query('UPDATE products SET stock = GREATEST(0, stock - ?) WHERE id = ?', [item.cantidad, item.product_id]);
-        }
+      if (previousState !== estado) {
+        await conn.query('UPDATE orders SET estado = ? WHERE id = ?', [estado, id]);
+        await syncOrderStock(conn, id, estado);
       }
       await conn.commit();
     } catch (err) {
@@ -674,6 +713,20 @@ export const dbService = {
       [sinceISO]
     );
     return rows.map(r => ({ id: String(r.id), preference_id: String(r.preference_id), created_at: String(r.created_at) }));
+  },
+
+  /**
+   * Órdenes pendientes creadas antes de `beforeISO` que siguen apartando stock (máx. 100):
+   * candidatas a vencerse porque el link de pago ya caducó y nadie pagó.
+   */
+  async getStalePendingOrders(beforeISO: string): Promise<Array<{ id: string; created_at: string }>> {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT id, created_at FROM orders
+       WHERE estado = 'pendiente' AND stock_reservado = 1 AND created_at < ?
+       ORDER BY created_at ASC LIMIT 100`,
+      [beforeISO]
+    );
+    return rows.map(r => ({ id: String(r.id), created_at: String(r.created_at) }));
   },
 
   /**
@@ -712,14 +765,7 @@ export const dbService = {
       if (decision.recordPayment) {
         await conn.query('UPDATE orders SET payment_id = ? WHERE id = ?', [paymentId, id]);
       }
-      if (next === 'pagado') {
-        const [itemRows] = await conn.query<RowDataPacket[]>(
-          'SELECT product_id, cantidad FROM order_items WHERE order_id = ?', [id]
-        );
-        for (const item of itemRows) {
-          await conn.query('UPDATE products SET stock = GREATEST(0, stock - ?) WHERE id = ?', [item.cantidad, item.product_id]);
-        }
-      }
+      if (next) await syncOrderStock(conn, id, next);
       await conn.commit();
     } catch (err) {
       await conn.rollback();
