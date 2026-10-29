@@ -173,7 +173,7 @@ router.post('/recuperar', authRateLimiter, requestPasswordResetValidation, handl
       void (async () => {
         const rawToken = await dbService.createPasswordResetToken(target.id);
         const resetUrl = `${env.APP_URL}/auth/restablecer?token=${rawToken}`;
-        await sendPasswordResetEmail(target.email, resetUrl);
+        await sendPasswordResetEmail(target.email, resetUrl, target.nombre);
       })().catch((err) => {
         console.error(`[MAILER] Correo de recuperación falló: ${(err as Error).message}`);
       });
