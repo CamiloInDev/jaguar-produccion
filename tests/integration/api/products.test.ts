@@ -49,6 +49,32 @@ describe('GET /api/productos', () => {
     expect(res.status).toBe(200);
     expect(res.body.length).toBeGreaterThan(0);
   });
+
+  it('excludes inactive products', async () => {
+    const res = await request(app).get('/api/productos');
+    expect(res.status).toBe(200);
+    expect(res.body.some((p: any) => p.slug === 'inactive-product')).toBe(false);
+  });
+});
+
+describe('GET /api/productos/all', () => {
+  it('admin sees inactive products too', async () => {
+    const cookies = await getAdminCookies();
+    const res = await request(app).get('/api/productos/all').set('Cookie', cookies);
+    expect(res.status).toBe(200);
+    expect(res.body.some((p: any) => p.slug === 'inactive-product')).toBe(true);
+  });
+
+  it('rejects non-admin users', async () => {
+    const cookies = await getUserCookies();
+    const res = await request(app).get('/api/productos/all').set('Cookie', cookies);
+    expect(res.status).toBe(403);
+  });
+
+  it('rejects anonymous requests', async () => {
+    const res = await request(app).get('/api/productos/all');
+    expect(res.status).toBe(401);
+  });
 });
 
 describe('GET /api/productos/:slug', () => {

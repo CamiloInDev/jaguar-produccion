@@ -131,7 +131,7 @@ export default function Admin() {
     setLoading(true);
     try {
       const [pRes, oRes, mRes, sRes, rRes, cRes, hRes, eRes, uRes] = await Promise.allSettled([
-        axios.get('/api/productos'),
+        axios.get('/api/productos/all'),
         axios.get('/api/ordenes/todas'),
         axios.get('/api/contacto'),
         axios.get('/api/slides/all'),

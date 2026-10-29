@@ -7,9 +7,10 @@ import { internalError } from '../middleware/errorHandler';
 
 const router = Router();
 
+// Listado público: solo productos activos. El panel admin usa /all.
 router.get('/', async (req, res) => {
   try {
-    let products = await dbService.getProducts();
+    let products = (await dbService.getProducts()).filter(p => p.activo);
     const { categoria, q } = req.query;
 
     if (categoria && categoria !== 'todos') {
@@ -29,10 +30,18 @@ router.get('/', async (req, res) => {
   }
 });
 
+router.get('/all', authenticateToken, requireRole('admin', 'editor'), async (_req, res) => {
+  try {
+    return res.json(await dbService.getProducts());
+  } catch (err: any) {
+    return internalError(res, err);
+  }
+});
+
 router.get('/:slug', async (req, res) => {
   try {
     const prod = await dbService.getProductBySlug(req.params.slug);
-    if (!prod) {
+    if (!prod || !prod.activo) {
       return res.status(404).json({ error: 'Producto no encontrado.' });
     }
     return res.json(prod);
