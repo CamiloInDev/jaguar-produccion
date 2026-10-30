@@ -1,4 +1,4 @@
-import { RowDataPacket } from 'mysql2/promise';
+import { RowDataPacket, ResultSetHeader } from 'mysql2/promise';
 import { pool } from './db-pool';
 
 /**
@@ -25,4 +25,16 @@ export async function ensureSchemaUpgrades(): Promise<void> {
     await pool.query("UPDATE orders SET stock_reservado = 1 WHERE estado IN ('pagado','enviado','entregado')");
     console.log('[DB] Esquema actualizado: orders.stock_reservado');
   }
+
+  // 2026-10-29 — el slide 4 del catálogo inicial ubicaba las estadías en "Antioquia y Caldas";
+  // son en Silvania, Cundinamarca. Solo corrige el texto original: si alguien ya lo editó
+  // desde Admin, no lo toca.
+  const [fix] = await pool.query<ResultSetHeader>(
+    `UPDATE slides SET subtitle = ? WHERE subtitle = ?`,
+    [
+      'Despierta entre las montañas de Silvania, Cundinamarca, a solo 42 km de Bogotá, en nuestras estadías cafeteras.',
+      'Despierta flotando sobre las montañas de Antioquia y Caldas en nuestras estadías cafeteras.',
+    ]
+  );
+  if (fix.affectedRows > 0) console.log('[DB] Texto del slide de estadías corregido (Silvania, Cundinamarca)');
 }

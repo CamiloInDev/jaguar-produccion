@@ -33,7 +33,7 @@ export default function Privacidad() {
             <h2 className="font-sans text-lg font-bold">1. Responsable del Tratamiento</h2>
           </div>
           <p className="text-sm text-[#122C9B]/70 font-light leading-relaxed">
-            <strong>Jaguar Coffee S.A.S.</strong>, identificada con NIT en trámite de actualización, con domicilio en Cra 4 # 12 – 78, La Candelaria, Bogotá, Colombia. Correo de contacto: cafejaguarcolombia@gmail.com.
+            <strong>Jaguar Coffee S.A.S.</strong>, identificada con NIT 901.811.782-1, con domicilio en Cra 4 # 12 – 78, La Candelaria, Bogotá, Colombia. Correo de contacto: cafejaguarcolombia@gmail.com.
           </p>
         </section>
 

@@ -178,11 +178,14 @@ export default function CheckoutPage() {
               className="mt-0.5 w-4 h-4 rounded border-stone-300 text-[#122C9B] focus:ring-[#FFA42C] cursor-pointer"
             />
             <span className="text-[11px] text-stone-600 font-light leading-relaxed">
-              Acepto la{' '}
+              Acepto los{' '}
+              <Link to="/terminos" target="_blank" className="font-bold text-[#FFA42C] hover:text-[#3D5FC9] underline underline-offset-2">
+                Términos y Condiciones
+              </Link>{' '}
+              y la{' '}
               <Link to="/privacidad" target="_blank" className="font-bold text-[#FFA42C] hover:text-[#3D5FC9] underline underline-offset-2">
                 Política de Tratamiento de Datos Personales
-              </Link>{' '}
-              y autorizo el tratamiento de mis datos de envío y contacto para procesar este pedido.
+              </Link>, y autorizo el tratamiento de mis datos de envío y contacto para procesar este pedido.
             </span>
           </label>
 

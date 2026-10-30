@@ -78,6 +78,10 @@ const STATIC_PAGES: Record<string, Omit<PageMeta, 'path'>> = {
     title: 'Política de tratamiento de datos personales | Jaguar Coffee',
     description: 'Política de privacidad y tratamiento de datos personales de Jaguar Coffee S.A.S.',
   },
+  '/terminos': {
+    title: 'Términos y condiciones | Jaguar Coffee',
+    description: 'Condiciones de compra de Jaguar Coffee: pagos, envíos, derecho de retracto, garantía, reversión del pago y PQR según la Ley 1480 de 2011.',
+  },
 };
 
 // Páginas que no deben indexarse (se sirven, pero con noindex; NO se bloquean en robots.txt

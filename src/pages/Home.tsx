@@ -391,7 +391,7 @@ export default function Home() {
             </span>
             <h3 className="font-sans text-2xl font-bold text-[#122C9B] leading-tight">Estadías entre Cafetales Coloniales</h3>
             <p className="text-xs text-[#122C9B]/70 leading-relaxed font-light">
-              Desconéctate y hospédate en nuestras fincas cafeteras tradicionales de Antioquia y Caldas. Reservas gestionadas a través de <strong>Airbnb</strong> con garantía total.
+              Desconéctate y hospédate en nuestra finca cafetera en Silvania, Cundinamarca, a solo 42 km de Bogotá. Reservas gestionadas a través de <strong>Airbnb</strong> con garantía total.
             </p>
           </div>
           <Link

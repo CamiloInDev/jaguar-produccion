@@ -27,6 +27,7 @@ const CasaJaguar = lazy(() => import('./pages/CasaJaguar'));
 const NuestraPlanta = lazy(() => import('./pages/NuestraPlanta'));
 const Contacto = lazy(() => import('./pages/Contacto'));
 const Privacidad = lazy(() => import('./pages/Privacidad'));
+const Terminos = lazy(() => import('./pages/Terminos'));
 const Login = lazy(() => import('./pages/Login'));
 const Register = lazy(() => import('./pages/Register'));
 const RecuperarPassword = lazy(() => import('./pages/RecuperarPassword'));
@@ -90,6 +91,7 @@ export default function App() {
             <Route path="/nuestra-planta" element={<NuestraPlanta />} />
             <Route path="/contacto" element={<Contacto />} />
             <Route path="/privacidad" element={<Privacidad />} />
+            <Route path="/terminos" element={<Terminos />} />
             
             {/* Authentication Entries */}
             <Route path="/auth/login" element={<Login />} />

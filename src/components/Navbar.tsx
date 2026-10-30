@@ -28,10 +28,10 @@ export default function Navbar() {
 
   return (
     <nav id="app-navbar" className="bg-[#FFF9F5]/95 backdrop-blur-md border-b border-[#122C9B]/10 sticky top-0 z-50">
-      <div className="max-w-[90rem] mx-auto px-4 sm:px-6 lg:px-12 xl:px-20">
+      <div className="max-w-[90rem] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-20">
         <div className="flex justify-between items-center h-20">
           {/* Logo Brand */}
-          <div className="flex items-center flex-none mr-6 xl:mr-12">
+          <div className="flex items-center flex-none mr-4 xl:mr-8 2xl:mr-12">
             <Link to="/" className="flex items-center hover:opacity-90 transition-all">
               <img
                 src="/images/logo-color.png"
@@ -42,7 +42,7 @@ export default function Navbar() {
           </div>
 
           {/* Desktop Navigation */}
-          <div className="hidden lg:flex flex-1 items-center justify-center gap-x-6 xl:gap-x-10 2xl:gap-x-16">
+          <div className="hidden lg:flex flex-1 items-center justify-center gap-x-5 xl:gap-x-7 2xl:gap-x-16">
             {navLinks.map((link) => (
               <Link
                 key={link.path}
@@ -59,7 +59,7 @@ export default function Navbar() {
           </div>
 
           {/* Actions Menu */}
-          <div className="hidden lg:flex items-center flex-none ml-6 xl:ml-10">
+          <div className="hidden lg:flex items-center flex-none ml-4 xl:ml-8 2xl:ml-10">
             {/* Auth Buttons */}
             {user ? (
               <div className="flex items-center gap-4">

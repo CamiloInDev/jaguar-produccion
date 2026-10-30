@@ -54,6 +54,8 @@ export default function Footer() {
         <div className="flex flex-col md:flex-row justify-between items-center gap-2 text-xs text-stone-500">
           <span>&copy; {new Date().getFullYear()} Jaguar Coffee S.A.S.</span>
           <div className="flex items-center gap-3">
+            <a href="/terminos" className="hover:text-[#FFA42C] transition-colors">Términos y Condiciones</a>
+            <span>·</span>
             <a href="/privacidad" className="hover:text-[#FFA42C] transition-colors">Política de Privacidad</a>
             <span>·</span>
             <span className="flex items-center gap-1">
