@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { Product, Order, Experience, ContactMessage, CoffeeCategory, OrderStatus, CarouselSlide, Reservation, Course, Hacienda, HaciendaFeature, User, UserRole } from '../types';
 import ImageUploadField from '../components/ImageUploadField';
+import RespaldosPanel from '../components/RespaldosPanel';
 import { uploadImage } from '../lib/upload';
 
 const HACIENDA_ICONS = ['Sunrise', 'Moon', 'Coffee', 'TreePine', 'Car', 'Wifi', 'PawPrint', 'Users', 'MapPin'] as const;
@@ -21,7 +22,7 @@ export default function Admin() {
   const [messages, setMessages] = useState<ContactMessage[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
 
-  const [activeSegment, setActiveSegment] = useState<'productos' | 'ordenes' | 'mensajes' | 'slides' | 'reservas' | 'cursos' | 'estadias' | 'experiencias' | 'usuarios'>('productos');
+  const [activeSegment, setActiveSegment] = useState<'productos' | 'ordenes' | 'mensajes' | 'slides' | 'reservas' | 'cursos' | 'estadias' | 'experiencias' | 'usuarios' | 'respaldos'>('productos');
   const [slides, setSlides] = useState<CarouselSlide[]>([]);
   const [isEditingSlide, setIsEditingSlide] = useState(false);
   const [editingSlideId, setEditingSlideId] = useState<string | null>(null);
@@ -774,6 +775,14 @@ export default function Admin() {
           }`}
         >
           Usuarios ({users.length})
+        </button>
+        <button
+          onClick={() => { setActiveSegment('respaldos'); setIsEditingProduct(false); setIsEditingSlide(false); setIsEditingCourse(false); setIsEditingHacienda(false); setIsEditingExperience(false); }}
+          className={`pb-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
+            activeSegment === 'respaldos' ? 'border-[#122C9B] text-[#122C9B] font-black' : 'border-transparent text-stone-500 hover:text-[#122C9B]'
+          }`}
+        >
+          Respaldos
         </button>
       </div>
 
@@ -2118,6 +2127,9 @@ export default function Admin() {
               )}
             </>
           )}
+
+          {/* SEGMENT 10: RESPALDOS */}
+          {activeSegment === 'respaldos' && <RespaldosPanel />}
 
           {/* SEGMENT 9: USUARIOS */}
           {activeSegment === 'usuarios' && (

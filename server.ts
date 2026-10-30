@@ -23,6 +23,8 @@ import slideRoutes from './server/routes/slides';
 import reservationRoutes from './server/routes/reservations';
 import userRoutes from './server/routes/users';
 import chatRoutes from './server/routes/chat';
+import backupRoutes from './server/routes/backups';
+import { startRespaldosAutomaticos } from './server/jobs/respaldo-bd';
 import { UPLOADS_DIR, ensureUploadsDir } from './server/lib/uploads';
 import { cspDirectives } from './server/config/csp';
 import { buildSeo, sitemapUrls, clearSeoCache } from './server/seo';
@@ -143,6 +145,7 @@ app.use('/api/slides', slideRoutes);
 app.use('/api/reservas', reservationRoutes);
 app.use('/api/usuarios', userRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/respaldos', backupRoutes);
 
 // Cualquier petición que no haya casado con una ruta /api (ruta o método inexistente):
 // 404 JSON para TODOS los métodos. Sin esto, un DELETE/GET no registrado caía en el
@@ -259,6 +262,7 @@ async function start() {
     app.listen(env.PORT, '0.0.0.0', () => {
       console.log(`[JAGUAR-SERVER] Running on http://localhost:${env.PORT}`);
       startReconciliacionPagos();
+      startRespaldosAutomaticos();
     });
   } catch (err) {
     console.log(`[STARTUP ERROR] ${err}`);

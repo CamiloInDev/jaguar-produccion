@@ -31,6 +31,9 @@ data/
 uploads/
 uploads_test/
 
+# Respaldos de la base de datos (datos personales: nunca al repo ni al zip)
+backups/
+
 # -----------------------------------------------------------------------------
 # Editores y sistema operativo
 # -----------------------------------------------------------------------------

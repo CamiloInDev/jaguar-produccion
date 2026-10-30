@@ -127,6 +127,7 @@ export async function createTestApp() {
   app.use('/api/ordenes', orderRoutes);
   app.use('/api/contacto', contactRoutes);
   app.use('/api/reservas', reservationRoutes);
+  app.use('/api/respaldos', (await import('../server/routes/backups')).default);
 
   // Espejo de server.ts: 404 JSON para rutas/métodos /api inexistentes y
   // errorHandler global (400 en JSON malformado).

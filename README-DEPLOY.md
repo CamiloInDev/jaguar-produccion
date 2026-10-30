@@ -110,7 +110,9 @@ crítica, el servidor **no arranca** y el log dice exactamente cuál falta.
 | `MP_ACCESS_TOKEN` | *(de Mercado Pago)* | *Tus integraciones → [app] → Credenciales de prueba / producción → Access Token*. Solo backend. El de prueba **también** empieza con `APP_USR-`: cada ambiente con el suyo |
 | `MP_WEBHOOK_SECRET` | *(de Mercado Pago)* | *Tus integraciones → [app] → Webhooks → Configurar notificaciones* → clave secreta. Valida la firma `x-signature` del webhook; **no** es el Access Token |
 | `MP_STATEMENT_DESCRIPTOR` | `JAGUARCOFFEE` | Opcional. Texto en el extracto de la tarjeta (máx. 13) |
-| `MP_EXCLUDED_PAYMENT_TYPES` · `MP_MAX_INSTALLMENTS` · `MP_PREFERENCE_EXPIRATION_MINUTES` | *(vacías)* | Opcionales — decisiones de producto: excluir medios (`ticket`=Efecty, `bank_transfer`=PSE), tope de cuotas, vigencia del link de pago. Vacías = comportamiento por defecto de Mercado Pago |
+| `MP_EXCLUDED_PAYMENT_TYPES` · `MP_MAX_INSTALLMENTS` · `MP_PREFERENCE_EXPIRATION_MINUTES` | `ticket` · `1` · `120` | Opcionales — decisiones del 2026-10-29: sin Efecty (`ticket`), una sola cuota, link de pago de 2 horas. Al vencer el link sin pago, el pedido se cancela solo y libera el stock apartado. `MP_EXCLUDED_PAYMENT_TYPES` vacío = no excluye nada |
+| `ORDERS_NOTIFY_EMAIL` | `support.coffe.jaguar@gmail.com` | Opcional. Buzón que recibe el aviso de cada venta nueva y de cancelaciones de pedidos pagados |
+| `BACKUPS_DIR` · `RESPALDOS_CONSERVAR` | `~/jaguar-backups` · `14` | Opcionales. Carpeta (fuera de la app) y cantidad de respaldos diarios de la BD que se conservan (§8) |
 | `SMTP_HOST` | `smtp.hostinger.com` | hPanel → Correos → cuenta de correo (ej. `noreply@tudominio.com`). Obligatorio en producción |
 | `SMTP_PORT` | `465` | SSL implícito (el código activa `secure` con 465). `587` también funciona con STARTTLS |
 | `SMTP_USER` | `noreply@tudominio.com` | |
@@ -241,7 +243,7 @@ npm run dev                 # http://localhost:3000 (Vite + API en un solo proce
 
 Entra a `https://tudominio.com/admin` con una cuenta de rol `admin`. En
 producción se crea como en §5.4; en local la crea `npm run db:seed` con `ADMIN_*`. El panel
-tiene 9 pestañas (`src/pages/Admin.tsx`):
+tiene 10 pestañas (`src/pages/Admin.tsx`):
 
 | Pestaña | Qué se hace ahí | Endpoint detrás |
 |---|---|---|
@@ -254,6 +256,13 @@ tiene 9 pestañas (`src/pages/Admin.tsx`):
 | **Estadías** | Crear, editar y borrar las estadías que se muestran en `/turismo` (Glamping, ECO Hostal, o nuevas propiedades): precio/noche, capacidad, galería, features, links de Airbnb/Maps | `/api/haciendas` |
 | **Experiencias** | Crear, editar y borrar las experiencias (cata, tueste, tours, etc.): precio, duración, capacidad, imagen, galería, detalles incluidos, recomendaciones | `/api/experiencias` |
 | **Usuarios** | Ver todos los usuarios registrados, cambiar su rol (`admin`/`editor`/`support`/`cliente`) o eliminarlos. Un admin no puede cambiar su propio rol ni eliminarse a sí mismo | `/api/usuarios` |
+| **Respaldos** | Lista y descarga de los respaldos de la base de datos (uno automático por día, se guardan los últimos 14) y botón para crear uno al instante. Se restauran importando el `.sql.gz` en phpMyAdmin. Contienen datos personales | `/api/respaldos` |
+
+**Pedidos y stock (desde 2026-10-29):** un pedido aparta sus unidades apenas se crea (estado `pendiente`), así la
+última unidad no se vende dos veces. Las devuelve al inventario si termina `cancelado` (pago rechazado, link vencido a
+las 2 h, reembolso o cancelación manual). Cada cambio de estado le envía al cliente un correo con la marca
+(confirmado, enviado, entregado, cancelado/reembolsado, vencido) y cada venta nueva llega a `ORDERS_NOTIFY_EMAIL`.
+La columna `orders.stock_reservado` se agrega sola al arrancar (`server/config/schema-upgrades.ts`).
 
 Todos los campos de imagen del panel (Productos, Slides, Estadías, Experiencias)
 tienen un botón **"Subir imagen"** que sube el archivo desde tu computador —
@@ -402,8 +411,8 @@ npm run test:e2e       # end-to-end, con el server corriendo aparte
    - **Conciliación automática (2026-10-22):** `server/jobs/reconciliar-pagos.ts` revisa cada 5 min las órdenes `pendiente` de las últimas 72 h, consulta a MP los pagos por `external_reference` y aplica el aprobado con la misma función que el webhook. Así ninguna orden queda pendiente aunque el webhook no llegue (cliente que cierra el navegador, PSE/Efecty, CDN).
    - **Pendiente (clave de firma desalineada):** el webhook llega, pero la firma `x-signature` no cuadra con `MP_WEBHOOK_SECRET` (probado con 540 combinaciones de manifiesto sobre 5 notificaciones reales: ninguna coincide). No es el CDN: los `502` fueron transitorios por los redeploys. Para volver a exigir firma: copiar la clave actual en *Tus integraciones → Webhooks → Clave secreta*, actualizarla en Hostinger y poner `MP_WEBHOOK_MODO=estricto`. Mientras tanto el aviso se usa solo como disparador y el estado se decide consultando la API (pago real de la cuenta + orden + monto/moneda), así que un request falsificado no puede marcar nada como pagado.
    - **Pendiente cuando tengamos la clave de webhooks (panel MP):** (1) copiar la clave actual de *Tus integraciones → Webhooks → Clave secreta* a `MP_WEBHOOK_SECRET` en Hostinger, (2) agregar `MP_WEBHOOK_MODO=estricto`, (3) redeploy, (4) verificar en los registros que las notificaciones ya no logueen `[MP] Webhook con firma no verificable`. Con la clave alineada la firma se vuelve obligatoria otra vez; hoy funciona sin ella porque la decisión sale siempre de la API.
-   - **Pendiente de producción MP (sin depender de lo anterior):** activar credenciales de producción (industria + sitio web), cargarlas en Hostinger, webhook en *modo producción*, una compra real de monto bajo y su reembolso.
-   - Decisiones de producto pendientes (variables opcionales `MP_*`, §4): ¿excluir Efecty?, ¿tope de cuotas?, ¿vigencia del link de pago?, ¿enviar IVA (`taxes`)? — Mercado Pago asume 19% incluido si no se envía; consultar con el contador.
+   - **Resuelto 2026-10-29: producción MP.** Credenciales de producción cargadas, compra real de $5.000 aprobada (orden pasó a `pagado`) y reembolsada (pasó sola a `cancelado`). El mínimo práctico está por encima de $1.000 COP.
+   - Decisiones de producto tomadas el 2026-10-29: sin Efecty, 1 cuota, link de 2 h, stock apartado (§4, §8). Sigue pendiente ¿enviar IVA (`taxes`)? — Mercado Pago asume 19% incluido si no se envía; consultar con el contador.
    - Guía completa de implementación, pruebas y salida a producción: `.claude/skills/mercadopago-checkout/`.
 
 2. **Resuelto 2026-09-24: la CSP recortada por el CDN de Hostinger.** El CDN (`Server: hcdn`) sigue reemplazando la cabecera, pero ahora la misma política también va como `<meta http-equiv="Content-Security-Policy">` en `index.html`. La inyecta `vite build` desde `server/config/csp.ts` y el CDN no la toca. Se verificó en navegador que no bloquea nada del sitio: páginas públicas, chat de n8n y panel admin.
@@ -413,7 +422,7 @@ npm run test:e2e       # end-to-end, con el server corriendo aparte
    - Registrar el correo del cliente y darle rol `admin` en *Admin → Usuarios*.
    - Desde 2026-09-24, cambiar la contraseña **sí cierra** las sesiones en los otros dispositivos (`token_version`), y el rol se lee de la BD en cada petición, así que un cambio de rol aplica al instante.
 
-4. **Backups de MySQL.** El tablero de la Web App muestra "Respaldos: Diariamente". Falta confirmar que incluyan la base de datos y probar una restauración.
+4. **Resuelto 2026-10-29: backups de MySQL.** La app crea un respaldo diario propio (`server/jobs/respaldo-bd.ts`) en `~/jaguar-backups`, descargable desde *Admin → Respaldos*. Se probó la restauración completa en una base aparte: mismas filas y mismo `CHECKSUM TABLE` en todas las tablas. Recomendado: descargar una copia fuera del servidor cada cierto tiempo.
 
 5. **Persistencia de uploads en Hostinger.** Confirmado 2026-10-05: `./uploads` se perdía al redistribuir. Desde entonces en producción se guardan en `~/jaguar-uploads` (`server/lib/uploads.ts`). Falta confirmar en vivo que esa carpeta sobrevive a una redistribución. Si no, mover el almacenamiento a un servicio externo (Cloudinary, S3-compatible); `optimizeAndSaveImage` es el único punto a cambiar.
 
